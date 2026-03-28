@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Simulator Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0c0f;--bg2:#111318;--bg3:#181b22;--border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.13);--text:#e8e9ed;--muted:#6b6e7a;--accent:#4f9cf9;--green:#22c97a;--red:#f05252;--gold:#f5c842;--purple:#a78bfa;--orange:#fb923c;--teal:#2dd4bf}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-weight:300;min-height:100vh;font-size:14px}
+header{padding:1.1rem 2rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.logo h1{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;color:#fff}
+.logo p{font-size:.58rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-top:1px}
+.hcontrols{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+select.hsel{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:5px 9px;border-radius:6px;font-size:.73rem;font-family:'Inter',sans-serif;cursor:pointer;outline:none}
+select.hsel option{background:#1a1d26}
+.conv-badge{background:rgba(79,156,249,.1);border:1px solid rgba(79,156,249,.25);border-radius:5px;padding:4px 9px;font-size:.7rem;color:var(--accent);white-space:nowrap;font-family:'Syne',sans-serif;font-weight:600}
+.app{display:grid;grid-template-columns:345px 1fr;min-height:calc(100vh - 68px)}
+.sidebar{padding:1rem;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:1rem;overflow-y:auto;max-height:calc(100vh - 68px)}
+.sh{font-family:'Syne',sans-serif;font-size:.57rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:.55rem}
+.si{margin-bottom:.85rem}.si:last-child{margin-bottom:0}
+.sl{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.sl span{font-size:.72rem;color:#9095a8}
+.sl .sv{font-family:'Syne',sans-serif;font-size:.84rem;font-weight:600;color:#fff}
+input[type=range]{-webkit-appearance:none;width:100%;height:2px;background:rgba(255,255,255,.1);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;cursor:pointer;transition:transform .15s,background .15s}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.3);background:var(--accent)}
+.div{height:1px;background:var(--border)}
+.acctabs{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:.7rem}
+.acctab{padding:4px 9px;border-radius:5px;border:1px solid var(--border);font-size:.65rem;font-family:'Syne',sans-serif;font-weight:600;cursor:pointer;transition:all .2s;color:var(--muted);background:transparent;white-space:nowrap}
+.acctab:hover{border-color:var(--border2);color:var(--text)}
+.acctab.active{border-color:var(--accent);color:var(--accent);background:rgba(79,156,249,.08)}
+.acc-info{background:rgba(79,156,249,.04);border:1px solid rgba(79,156,249,.13);border-radius:6px;padding:7px 9px;font-size:.66rem;color:#7a85a0;line-height:1.55;margin-bottom:.7rem}
+.acc-info strong{color:var(--accent);font-weight:500}
+.acc-info .plaf{color:var(--gold);font-size:.64rem;margin-top:3px;display:block}
+.ag{display:flex;flex-direction:column;gap:3px}
+.cathead{font-size:.53rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin:6px 0 3px;padding-left:2px}
+.arow{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;transition:border-color .2s,background .2s}
+.arow:hover{border-color:var(--border2);background:rgba(255,255,255,.03)}
+.arow.active{border-color:rgba(79,156,249,.35);background:rgba(79,156,249,.05)}
+.adot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.aname{flex:1;min-width:0}
+.an1{font-size:.7rem;color:#c0c3d0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.an2{font-size:.54rem;color:var(--muted);margin-top:1px}
+.tag{font-size:.52rem;letter-spacing:.03em;text-transform:uppercase;padding:2px 5px;border-radius:3px;font-weight:500;white-space:nowrap;flex-shrink:0}
+.tag-etf{background:rgba(79,156,249,.15);color:var(--accent)}
+.tag-action{background:rgba(45,212,191,.12);color:var(--teal)}
+.tag-oblig{background:rgba(34,201,122,.12);color:var(--green)}
+.tag-matieres{background:rgba(245,200,66,.15);color:var(--gold)}
+.tag-energie{background:rgba(251,146,60,.15);color:var(--orange)}
+.tag-crypto{background:rgba(167,139,250,.15);color:var(--purple)}
+.tag-safe{background:rgba(34,201,122,.1);color:var(--green)}
+.apct{display:flex;align-items:center;gap:3px}
+.apct input{width:44px;background:var(--bg2);border:1px solid var(--border2);color:#fff;padding:2px 4px;border-radius:4px;font-size:.7rem;font-family:'Inter',sans-serif;text-align:right;outline:none;-moz-appearance:textfield}
+.apct input::-webkit-inner-spin-button{-webkit-appearance:none}
+.apct span{font-size:.68rem;color:var(--muted)}
+.abar{height:4px;border-radius:3px;background:rgba(255,255,255,.05);overflow:hidden;margin:6px 0 3px;display:flex;gap:1px}
+.aseg{height:100%;transition:width .3s}
+.atot{font-size:.66rem;display:flex;justify-content:space-between}
+.atot .ok{color:var(--green)}.atot .over{color:var(--red)}
+.content{padding:1.4rem 1.6rem;display:flex;flex-direction:column;gap:1.1rem;overflow-y:auto;max-height:calc(100vh - 68px)}
+.mrow{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.mc{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.ml{font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.mv{font-family:'Syne',sans-serif;font-size:1.05rem;font-weight:700;color:#fff}
+.mv.green{color:var(--green)}.mv.red{color:var(--red)}.mv.gold{color:var(--gold)}.mv.blue{color:var(--accent)}
+.msub{font-size:.58rem;color:var(--muted);margin-top:2px}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.cc{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:.9rem}
+.cc.full{grid-column:1/-1}
+.cch{font-family:'Syne',sans-serif;font-size:.56rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem}
+.legrow{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:6px}
+.leg{display:flex;align-items:center;gap:4px;font-size:.62rem;color:var(--muted)}
+.legsq{width:7px;height:7px;border-radius:2px;flex-shrink:0}
+.cwrap{position:relative;width:100%}
+.btable{width:100%;border-collapse:collapse;font-size:.68rem}
+.btable th{color:var(--muted);font-weight:400;font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;padding:6px 8px;text-align:right;border-bottom:1px solid var(--border)}
+.btable th:first-child{text-align:left}
+.btable td{padding:6px 8px;text-align:right;border-bottom:1px solid rgba(255,255,255,.02);color:#9295a8}
+.btable td:first-child{text-align:left}
+.btable tr.tot td{border-top:1px solid rgba(255,255,255,.08);color:#fff;font-weight:500;border-bottom:none}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
+@media(max-width:960px){.app{grid-template-columns:1fr}.sidebar{max-height:none;border-right:none;border-bottom:1px solid var(--border)}.content{max-height:none}.cgrid{grid-template-columns:1fr}.cc.full{grid-column:1}.mrow{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon"><svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
+    <div><h1>Portfolio Simulator Pro</h1><p>Simulation d'épargne multi-actifs</p></div>
+  </div>
+  <div class="hcontrols">
+    <div class="conv-badge" id="conv-badge">—</div>
+    <select class="hsel" id="sel-base" onchange="onCurrChange()">
+      <option value="EUR" selected>€ Euro (EUR)</option>
+      <option value="USD">$ Dollar US (USD)</option>
+      <option value="CHF">₣ Franc suisse (CHF)</option>
+      <option value="GBP">£ Livre sterling (GBP)</option>
+      <option value="JPY">¥ Yen japonais (JPY)</option>
+      <option value="CAD">C$ Dollar canadien (CAD)</option>
+      <option value="AUD">A$ Dollar australien (AUD)</option>
+      <option value="CNY">¥ Yuan chinois (CNY)</option>
+      <option value="BRL">R$ Real brésilien (BRL)</option>
+      <option value="INR">₹ Roupie indienne (INR)</option>
+    </select>
+    <select class="hsel" id="sel-disp" onchange="compute()">
+      <option value="EUR" selected>Afficher en € EUR</option>
+      <option value="USD">Afficher en $ USD</option>
+      <option value="CHF">Afficher en ₣ CHF</option>
+      <option value="GBP">Afficher en £ GBP</option>
+      <option value="JPY">Afficher en ¥ JPY</option>
+      <option value="CAD">Afficher en C$ CAD</option>
+      <option value="AUD">Afficher en A$ AUD</option>
+      <option value="CNY">Afficher en ¥ CNY</option>
+      <option value="BRL">Afficher en R$ BRL</option>
+      <option value="INR">Afficher en ₹ INR</option>
+    </select>
+  </div>
+</header>
+
+<div class="app">
+<aside class="sidebar">
+  <div>
+    <div class="sh">Paramètres d'épargne</div>
+    <div class="si"><div class="sl"><span>Versement mensuel</span><span class="sv" id="o-m">—</span></div><input type="range" id="s-m" min="50" max="20000" step="50" value="500" oninput="compute()"></div>
+    <div class="si"><div class="sl"><span>Capital initial</span><span class="sv" id="o-c">—</span></div><input type="range" id="s-c" min="0" max="500000" step="1000" value="5000" oninput="compute()"></div>
+    <div class="si"><div class="sl"><span>Durée</span><span class="sv" id="o-d">20 ans</span></div><input type="range" id="s-d" min="1" max="50" step="1" value="20" oninput="compute()"></div>
+    <div class="si"><div class="sl"><span>Inflation annuelle</span><span class="sv" id="o-i">2.5 %</span></div><input type="range" id="s-i" min="0" max="10" step="0.1" value="2.5" oninput="compute()"></div>
+  </div>
+  <div class="div"></div>
+  <div>
+    <div class="sh">Enveloppe fiscale</div>
+    <div class="acctabs" id="acctabs"></div>
+    <div class="acc-info" id="acc-info"></div>
+    <div class="si"><div class="sl"><span>Fiscalité manuelle</span><span class="sv" id="o-t">30 %</span></div><input type="range" id="s-t" min="0" max="60" step="1" value="30" oninput="onTaxManual()"></div>
+  </div>
+  <div class="div"></div>
+  <div>
+    <div class="sh">Allocation portefeuille</div>
+    <div class="ag" id="ag"></div>
+    <div style="margin-top:8px">
+      <div class="abar" id="abar"></div>
+      <div class="atot"><span style="color:var(--muted)">Total alloué</span><span id="atot" class="ok">0 %</span></div>
+    </div>
+  </div>
+</aside>
+
+<div class="content">
+  <div class="mrow">
+    <div class="mc"><div class="ml">Capital investi</div><div class="mv blue" id="m1">—</div><div class="msub">versements cumulés</div></div>
+    <div class="mc"><div class="ml">Valeur brute finale</div><div class="mv green" id="m2">—</div><div class="msub" id="m2s">—</div></div>
+    <div class="mc"><div class="ml">Valeur nette (impôts)</div><div class="mv gold" id="m3">—</div><div class="msub" id="m3s">—</div></div>
+    <div class="mc"><div class="ml">Valeur réelle (- inflation)</div><div class="mv" id="m4">—</div><div class="msub" id="m4s">—</div></div>
+  </div>
+  <div class="cc full">
+    <div class="cch">Évolution du portefeuille dans le temps</div>
+    <div class="legrow">
+      <div class="leg"><div class="legsq" style="background:#4f9cf9"></div>Valeur brute</div>
+      <div class="leg"><div class="legsq" style="background:#f5c842"></div>Valeur nette</div>
+      <div class="leg"><div class="legsq" style="background:#f05252;opacity:.8"></div>Valeur réelle</div>
+      <div class="leg"><div class="legsq" style="background:rgba(255,255,255,.2)"></div>Capital investi</div>
+    </div>
+    <div class="cwrap" style="height:240px"><canvas id="ch1"></canvas></div>
+  </div>
+  <div class="cgrid">
+    <div class="cc">
+      <div class="cch">Répartition du portefeuille</div>
+      <div style="display:flex;align-items:center;gap:1rem">
+        <div class="cwrap" style="height:155px;width:155px;flex-shrink:0"><canvas id="ch2"></canvas></div>
+        <div id="dleg" style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0"></div>
+      </div>
+    </div>
+    <div class="cc">
+      <div class="cch">Gain final par actif</div>
+      <div class="cwrap" style="height:155px"><canvas id="ch3"></canvas></div>
+    </div>
+  </div>
+  <div class="cc full">
+    <div class="cch">Détail par actif</div>
+    <table class="btable">
+      <thead><tr><th>Actif</th><th>Alloc.</th><th>Rend./an</th><th>Capital investi</th><th>Valeur brute</th><th>Gain brut</th><th>Valeur nette</th></tr></thead>
+      <tbody id="btbody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<script>
+const FX={EUR:1,USD:1.08,CHF:0.96,GBP:0.85,JPY:163,CAD:1.47,AUD:1.65,CNY:7.82,BRL:5.45,INR:90.2};
+const SYM={EUR:'€',USD:'$',CHF:'₣',GBP:'£',JPY:'¥',CAD:'C$',AUD:'A$',CNY:'¥',BRL:'R$',INR:'₹'};
+
+let baseCur='EUR',dispCur='EUR',taxManual=false,curAcc='cto';
+let c1=null,c2=null,c3=null;
+
+const ACCOUNTS=[
+  {id:'cto',  label:'CTO',      tax:30,   plafond:null,
+   info:'<strong>Compte-Titres Ordinaire</strong> — Pas de plafond. Gains soumis à la flat tax 30% (PFU). Accès à tous les marchés mondiaux.'},
+  {id:'pea',  label:'PEA',      tax:17.2, plafond:150000,
+   info:'<strong>PEA</strong> — Plafond 150 000€. Après 5 ans : prélèvements sociaux 17.2% seulement. Limité aux actions européennes et ETF éligibles.',plafondLabel:'150 000 €'},
+  {id:'pme',  label:'PEA-PME',  tax:17.2, plafond:225000,
+   info:'<strong>PEA-PME</strong> — Plafond 225 000€. Dédié aux PME/ETI européennes. Cumulable avec le PEA.',plafondLabel:'225 000 €'},
+  {id:'av',   label:'Ass. Vie', tax:7.5,  plafond:null,
+   info:'<strong>Assurance-Vie</strong> — Après 8 ans : abattement 4 600€/an puis 7.5% sur les gains. Succession avantageuse. Fonds euros, SCPI, UC.'},
+  {id:'per',  label:'PER',      tax:0,    plafond:null,
+   info:'<strong>Plan Épargne Retraite</strong> — Versements déductibles du revenu imposable. Imposition à la sortie retraite (souvent 0–11%). Capital bloqué.'},
+  {id:'isa',  label:'ISA',      tax:0,    plafond:20000,
+   info:'<strong>ISA (UK)</strong> — Plafond £20 000/an. Gains et dividendes 100% exonérés d\'impôts. Idéal pour investisseurs britanniques.',plafondLabel:'£20 000/an'},
+  {id:'401k', label:'401(k)',   tax:0,    plafond:23000,
+   info:'<strong>401(k) (USA)</strong> — Plafond $23 000/an. Versements pré-taxe, imposition à la retraite. Souvent abondé par l\'employeur.',plafondLabel:'$23 000/an'},
+  {id:'roth', label:'Roth IRA', tax:0,    plafond:7000,
+   info:'<strong>Roth IRA (USA)</strong> — Plafond $7 000/an. Versements post-taxe mais retraits entièrement exonérés. Idéal pour jeunes investisseurs.',plafondLabel:'$7 000/an'},
+  {id:'free', label:'Libre',    tax:30,   plafond:null,
+   info:'<strong>Personnalisé</strong> — Définissez vous-même votre taux de fiscalité via le curseur ci-dessous.'},
+];
+
+const ASSETS=[
+  // ETF & Indices
+  {id:'snp500',   name:'S&P 500 (ETF)',         cat:'etf',     rate:10.5,color:'#4f9cf9'},
+  {id:'msciw',    name:'MSCI World (ETF)',        cat:'etf',     rate:9.2, color:'#60a5fa'},
+  {id:'nasdaq',   name:'Nasdaq 100 (ETF)',        cat:'etf',     rate:13.0,color:'#3b82f6'},
+  {id:'cac40',    name:'CAC 40 (ETF)',            cat:'etf',     rate:7.8, color:'#2563eb'},
+  {id:'dax',      name:'DAX (ETF)',               cat:'etf',     rate:8.1, color:'#1d4ed8'},
+  {id:'nikkei',   name:'Nikkei 225 (ETF)',        cat:'etf',     rate:6.5, color:'#93c5fd'},
+  {id:'em',       name:'MSCI Emerging (ETF)',     cat:'etf',     rate:7.0, color:'#bfdbfe'},
+  {id:'russel',   name:'Russell 2000 (ETF)',      cat:'etf',     rate:9.8, color:'#a5f3fc'},
+  {id:'stoxx',    name:'Euro Stoxx 50 (ETF)',     cat:'etf',     rate:7.5, color:'#67e8f9'},
+  {id:'ftse',     name:'FTSE 100 (ETF)',          cat:'etf',     rate:6.8, color:'#22d3ee'},
+  {id:'hangseng', name:'Hang Seng (ETF)',         cat:'etf',     rate:5.2, color:'#06b6d4'},
+  {id:'sp500v',   name:'S&P Value (ETF)',         cat:'etf',     rate:8.9, color:'#0891b2'},
+  {id:'reit',     name:'REIT Global (ETF)',       cat:'etf',     rate:8.0, color:'#0e7490'},
+  {id:'divid',    name:'ETF Dividendes monde',    cat:'etf',     rate:7.5, color:'#155e75'},
+  {id:'smallcap', name:'Small Cap (ETF)',         cat:'etf',     rate:10.2,color:'#164e63'},
+  // Actions individuelles
+  {id:'aapl',     name:'Apple (AAPL)',            cat:'action',  rate:15.2,color:'#2dd4bf'},
+  {id:'msft',     name:'Microsoft (MSFT)',        cat:'action',  rate:14.8,color:'#22d3ee'},
+  {id:'goog',     name:'Alphabet (GOOG)',         cat:'action',  rate:13.5,color:'#38bdf8'},
+  {id:'amzn',     name:'Amazon (AMZN)',           cat:'action',  rate:16.0,color:'#7dd3fc'},
+  {id:'nvda',     name:'Nvidia (NVDA)',           cat:'action',  rate:40.0,color:'#bae6fd'},
+  {id:'tsla',     name:'Tesla (TSLA)',            cat:'action',  rate:22.0,color:'#f0abfc'},
+  {id:'meta',     name:'Meta (META)',             cat:'action',  rate:18.5,color:'#e879f9'},
+  {id:'brk',      name:'Berkshire (BRK.B)',       cat:'action',  rate:11.2,color:'#d946ef'},
+  {id:'jpm',      name:'JPMorgan (JPM)',          cat:'action',  rate:10.5,color:'#c026d3'},
+  {id:'visa',     name:'Visa (V)',                cat:'action',  rate:12.8,color:'#a21caf'},
+  {id:'lvmh',     name:'LVMH',                   cat:'action',  rate:11.5,color:'#86198f'},
+  {id:'asml',     name:'ASML',                   cat:'action',  rate:18.0,color:'#f43f5e'},
+  {id:'nestle',   name:'Nestlé',                 cat:'action',  rate:7.2, color:'#e11d48'},
+  {id:'sap',      name:'SAP',                    cat:'action',  rate:9.5, color:'#be123c'},
+  {id:'total',    name:'TotalEnergies',           cat:'action',  rate:8.8, color:'#9f1239'},
+  {id:'novo',     name:'Novo Nordisk',            cat:'action',  rate:21.0,color:'#84cc16'},
+  {id:'tsmc',     name:'TSMC',                   cat:'action',  rate:17.5,color:'#65a30d'},
+  {id:'samsung',  name:'Samsung',                cat:'action',  rate:8.2, color:'#4d7c0f'},
+  {id:'hermes',   name:'Hermès',                 cat:'action',  rate:13.5,color:'#3f6212'},
+  {id:'jnj',      name:'Johnson & Johnson',      cat:'action',  rate:8.5, color:'#365314'},
+  {id:'pg',       name:'Procter & Gamble',       cat:'action',  rate:9.0, color:'#1a2e05'},
+  // Obligations
+  {id:'oatfr',    name:'Obligations France 10Y', cat:'oblig',   rate:3.5, color:'#22c97a'},
+  {id:'bund',     name:'Bund Allemagne 10Y',     cat:'oblig',   rate:3.2, color:'#34d399'},
+  {id:'ustrsy',   name:'US Treasury 10Y',        cat:'oblig',   rate:4.5, color:'#6ee7b7'},
+  {id:'ustrsy2',  name:'US Treasury 2Y',         cat:'oblig',   rate:5.1, color:'#a7f3d0'},
+  {id:'corpig',   name:'Corporate IG (ETF)',     cat:'oblig',   rate:4.8, color:'#bbf7d0'},
+  {id:'corphy',   name:'High Yield (ETF)',       cat:'oblig',   rate:7.5, color:'#d1fae5'},
+  {id:'em_bond',  name:'Obligations EM',         cat:'oblig',   rate:6.2, color:'#059669'},
+  {id:'inflation',name:'OAT Inflation',          cat:'oblig',   rate:2.8, color:'#065f46'},
+  {id:'covered',  name:'Covered Bonds',          cat:'oblig',   rate:3.8, color:'#047857'},
+  {id:'convert',  name:'Obligations convert.',   cat:'oblig',   rate:6.0, color:'#10b981'},
+  {id:'munic',    name:'Obligations municip.',   cat:'oblig',   rate:3.5, color:'#0d9488'},
+  {id:'supr',     name:'Oblig. supranationales', cat:'oblig',   rate:3.2, color:'#0f766e'},
+  // Matières premières
+  {id:'gold',     name:'Or',                     cat:'matieres',rate:7.2, color:'#f5c842'},
+  {id:'silver',   name:'Argent',                 cat:'matieres',rate:5.8, color:'#d1d5db'},
+  {id:'plat',     name:'Platine',                cat:'matieres',rate:3.5, color:'#e5e7eb'},
+  {id:'copper',   name:'Cuivre',                 cat:'matieres',rate:6.1, color:'#b45309'},
+  {id:'lithi',    name:'Lithium',                cat:'matieres',rate:8.5, color:'#c084fc'},
+  {id:'cobalt',   name:'Cobalt',                 cat:'matieres',rate:5.2, color:'#818cf8'},
+  {id:'nickel',   name:'Nickel',                 cat:'matieres',rate:4.8, color:'#a3e635'},
+  {id:'tin',      name:'Étain',                  cat:'matieres',rate:5.5, color:'#bef264'},
+  {id:'alum',     name:'Aluminium',              cat:'matieres',rate:4.2, color:'#d9f99d'},
+  {id:'rare',     name:'Terres rares (ETF)',     cat:'matieres',rate:9.0, color:'#fde68a'},
+  {id:'agri',     name:'Agri (blé, maïs, ETF)', cat:'matieres',rate:3.8, color:'#fef3c7'},
+  {id:'palla',    name:'Palladium',              cat:'matieres',rate:4.5, color:'#f0fdf4'},
+  // Énergie
+  {id:'oil',      name:'Pétrole WTI',            cat:'energie', rate:4.5, color:'#fb923c'},
+  {id:'brent',    name:'Pétrole Brent',          cat:'energie', rate:4.3, color:'#f97316'},
+  {id:'gas',      name:'Gaz naturel',            cat:'energie', rate:3.2, color:'#ea580c'},
+  {id:'coal',     name:'Charbon',                cat:'energie', rate:2.8, color:'#78716c'},
+  {id:'uran',     name:'Uranium',                cat:'energie', rate:9.0, color:'#84cc16'},
+  {id:'solar',    name:'Énergie solaire ETF',    cat:'energie', rate:11.0,color:'#facc15'},
+  {id:'wind',     name:'Éolien ETF',             cat:'energie', rate:9.5, color:'#fbbf24'},
+  {id:'hydro',    name:'Hydrogène ETF',          cat:'energie', rate:12.0,color:'#fcd34d'},
+  {id:'nuke',     name:'Nucléaire ETF',          cat:'energie', rate:8.5, color:'#a3e635'},
+  // Crypto
+  {id:'btc',      name:'Bitcoin (BTC)',           cat:'crypto',  rate:40.0,color:'#f59e0b'},
+  {id:'eth',      name:'Ethereum (ETH)',          cat:'crypto',  rate:35.0,color:'#a78bfa'},
+  {id:'sol',      name:'Solana (SOL)',            cat:'crypto',  rate:45.0,color:'#06b6d4'},
+  {id:'bnb',      name:'BNB',                    cat:'crypto',  rate:30.0,color:'#fbbf24'},
+  {id:'xrp',      name:'XRP',                    cat:'crypto',  rate:25.0,color:'#38bdf8'},
+  {id:'ada',      name:'Cardano (ADA)',           cat:'crypto',  rate:20.0,color:'#818cf8'},
+  {id:'dot',      name:'Polkadot (DOT)',          cat:'crypto',  rate:22.0,color:'#e879f9'},
+  {id:'link',     name:'Chainlink (LINK)',        cat:'crypto',  rate:28.0,color:'#67e8f9'},
+  {id:'avax',     name:'Avalanche (AVAX)',        cat:'crypto',  rate:32.0,color:'#f43f5e'},
+  {id:'matic',    name:'Polygon (MATIC)',         cat:'crypto',  rate:28.0,color:'#8b5cf6'},
+  // Épargne sécurisée
+  {id:'livreta',  name:'Livret A',               cat:'safe',    rate:3.0, color:'#22c97a'},
+  {id:'ldds',     name:'LDDS',                   cat:'safe',    rate:3.0, color:'#34d399'},
+  {id:'lep',      name:'LEP',                    cat:'safe',    rate:4.0, color:'#6ee7b7'},
+  {id:'csl',      name:'Épargne logement (CEL)', cat:'safe',    rate:2.0, color:'#a7f3d0'},
+  {id:'fonds_e',  name:'Fonds euros (AV)',       cat:'safe',    rate:2.5, color:'#10b981'},
+  {id:'scpi',     name:'SCPI',                   cat:'safe',    rate:5.5, color:'#059669'},
+  {id:'opci',     name:'OPCI',                   cat:'safe',    rate:4.8, color:'#0d9488'},
+  {id:'moneyM',   name:'Monétaire (OPCVM)',      cat:'safe',    rate:3.8, color:'#0f766e'},
+  {id:'pea_safe', name:'PEA fonds euros',        cat:'safe',    rate:2.8, color:'#0e7490'},
+];
+
+const CATLAB={etf:'ETFs & Indices',action:'Actions d\'entreprises',oblig:'Obligations',matieres:'Matières premières',energie:'Énergie & Ressources',crypto:'Cryptomonnaies',safe:'Épargne sécurisée'};
+const CATTAG={etf:'ETF',action:'Action',oblig:'Oblig.',matieres:'Matière',energie:'Énergie',crypto:'Crypto',safe:'Sécurisé'};
+
+const state={};
+ASSETS.forEach(a=>{state[a.id]=0});
+
+function fmtM(v){
+  const s=SYM[dispCur],abs=Math.abs(v);
+  if(abs>=1e6)return s+(v/1e6).toFixed(2)+'M';
+  if(abs>=1e3)return s+Math.round(v).toLocaleString('fr-FR');
+  return s+Math.round(v);
+}
+function fmtP(v){return(v>=0?'+':'')+v.toFixed(1)+'%'}
+
+function onCurrChange(){
+  baseCur=document.getElementById('sel-base').value;
+  updateBadge();compute();
+}
+
+function updateBadge(){
+  dispCur=document.getElementById('sel-disp').value;
+  const r=FX[dispCur]/FX[baseCur];
+  document.getElementById('conv-badge').textContent=
+    '1 '+baseCur+' = '+r.toFixed(4)+' '+dispCur;
+}
+
+function buildAccountTabs(){
+  const el=document.getElementById('acctabs');
+  el.innerHTML=ACCOUNTS.map(a=>
+    `<button class="acctab${a.id===curAcc?' active':''}" onclick="selectAccount('${a.id}')">${a.label}</button>`
+  ).join('');
+  renderAccInfo();
+}
+
+function selectAccount(id){
+  curAcc=id;
+  document.querySelectorAll('.acctab').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  const acc=ACCOUNTS.find(a=>a.id===id);
+  if(!taxManual){
+    document.getElementById('s-t').value=acc.tax;
+    document.getElementById('o-t').textContent=acc.tax+' %';
+  }
+  renderAccInfo();compute();
+}
+
+function renderAccInfo(){
+  const acc=ACCOUNTS.find(a=>a.id===curAcc);
+  let html=acc.info;
+  if(acc.plafond) html+=`<span class="plaf">Plafond : ${acc.plafondLabel}</span>`;
+  document.getElementById('acc-info').innerHTML=html;
+}
+
+function onTaxManual(){
+  taxManual=true;
+  document.getElementById('o-t').textContent=document.getElementById('s-t').value+' %';
+  compute();
+}
+
+function buildAssets(){
+  const g=document.getElementById('ag');g.innerHTML='';
+  const cats=[...new Set(ASSETS.map(a=>a.cat))];
+  cats.forEach(cat=>{
+    const ch=document.createElement('div');ch.className='cathead';ch.textContent=CATLAB[cat];g.appendChild(ch);
+    ASSETS.filter(a=>a.cat===cat).forEach(a=>{
+      const row=document.createElement('div');row.className='arow';row.id='row-'+a.id;
+      row.innerHTML=`<div class="adot" style="background:${a.color}"></div>
+        <div class="aname"><div class="an1">${a.name}</div><div class="an2">${a.rate}% /an</div></div>
+        <span class="tag tag-${a.cat}">${CATTAG[a.cat]}</span>
+        <div class="apct"><input type="number" id="pct-${a.id}" min="0" max="100" step="5" value="0"
+          oninput="setPct('${a.id}',this.value)"><span>%</span></div>`;
+      g.appendChild(row);
+    });
+  });
+  [['snp500',50],['gold',30],['livreta',20]].forEach(([id,v])=>{
+    setPct(id,v);document.getElementById('pct-'+id).value=v;
+  });
+  refreshBar();
+}
+
+function setPct(id,val){
+  state[id]=Math.max(0,Math.min(100,+val||0));
+  const row=document.getElementById('row-'+id);
+  if(row)row.classList.toggle('active',state[id]>0);
+  refreshBar();compute();
+}
+
+function refreshBar(){
+  const tot=Object.values(state).reduce((s,v)=>s+v,0);
+  document.getElementById('abar').innerHTML=ASSETS.filter(a=>state[a.id]>0)
+    .map(a=>`<div class="aseg" style="width:${state[a.id]/Math.max(tot,1)*100}%;background:${a.color}"></div>`).join('');
+  const el=document.getElementById('atot');
+  el.textContent=Math.round(tot)+' %';
+  el.className=tot>100?'over':'ok';
+}
+
+function compute(){
+  dispCur=document.getElementById('sel-disp').value;
+  updateBadge();
+  const rate_cv=FX[dispCur]/FX[baseCur];
+  const mens_b=+document.getElementById('s-m').value;
+  const cap0_b=+document.getElementById('s-c').value;
+  const mens=mens_b*rate_cv,cap0=cap0_b*rate_cv;
+  const dur=+document.getElementById('s-d').value;
+  const infl=+document.getElementById('s-i').value/100;
+  const tax=+document.getElementById('s-t').value/100;
+
+  document.getElementById('o-m').textContent=SYM[baseCur]+mens_b.toLocaleString('fr-FR');
+  document.getElementById('o-c').textContent=SYM[baseCur]+cap0_b.toLocaleString('fr-FR');
+  document.getElementById('o-d').textContent=dur+' ans';
+  document.getElementById('o-i').textContent=(+document.getElementById('s-i').value).toFixed(1)+' %';
+  document.getElementById('o-t').textContent=document.getElementById('s-t').value+' %';
+
+  const tot=Object.values(state).reduce((s,v)=>s+v,0);
+  if(tot===0)return;
+  const active=ASSETS.filter(a=>state[a.id]>0);
+  const wts=active.map(a=>state[a.id]/tot);
+  const avgR=active.reduce((s,a,i)=>s+(a.rate/100)*wts[i],0);
+
+  const labels=[],vB=[],vN=[],vR=[],vI=[];
+  let port=cap0;const yInv=mens*12;
+  for(let y=0;y<=dur;y++){
+    const inv=cap0+yInv*y;
+    const gain=Math.max(0,port-inv);
+    const net=port-gain*tax;
+    const real=net/Math.pow(1+infl,y);
+    labels.push('An '+y);
+    vB.push(Math.round(port));vN.push(Math.round(net));vR.push(Math.round(real));vI.push(Math.round(inv));
+    if(y<dur){let p=port;for(let m=0;m<12;m++){p+=mens;p*=(1+avgR/12)}port=p;}
+  }
+
+  const fI=cap0+yInv*dur,fB=vB[dur],fN=vN[dur],fR=vR[dur];
+  const gB=fB-fI,gN=fN-fI,gR=fR-fI;
+  document.getElementById('m1').textContent=fmtM(fI);
+  document.getElementById('m2').textContent=fmtM(fB);
+  document.getElementById('m2s').textContent='gain brut '+fmtP(gB/fI*100);
+  document.getElementById('m3').textContent=fmtM(fN);
+  document.getElementById('m3s').textContent='gain net '+fmtP(gN/fI*100);
+  document.getElementById('m4').textContent=fmtM(fR);
+  document.getElementById('m4').className='mv'+(fR>fI?' green':' red');
+  document.getElementById('m4s').textContent=(gR>=0?'+':'')+fmtM(gR)+' réels';
+
+  const gc='rgba(255,255,255,0.05)',tc='#4a4d5a';
+  const tp={backgroundColor:'#1a1d26',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+    titleColor:'#b0b3c0',bodyColor:'#6b6e7a',padding:9,
+    titleFont:{family:'Inter',size:11},bodyFont:{family:'Inter',size:10}};
+
+  if(c1)c1.destroy();
+  c1=new Chart(document.getElementById('ch1'),{type:'line',
+    data:{labels,datasets:[
+      {label:'Valeur brute',data:vB,borderColor:'#4f9cf9',backgroundColor:'rgba(79,156,249,.08)',fill:true,tension:.4,pointRadius:0,borderWidth:2.5,hoverRadius:4},
+      {label:'Valeur nette',data:vN,borderColor:'#f5c842',backgroundColor:'rgba(245,200,66,.06)',fill:true,tension:.4,pointRadius:0,borderWidth:2,hoverRadius:4},
+      {label:'Valeur réelle',data:vR,borderColor:'#f05252',backgroundColor:'rgba(240,82,82,.04)',fill:true,tension:.4,pointRadius:0,borderWidth:2,borderDash:[5,3],hoverRadius:4},
+      {label:'Capital investi',data:vI,borderColor:'rgba(255,255,255,.2)',backgroundColor:'rgba(255,255,255,.03)',fill:true,tension:.4,pointRadius:0,borderWidth:1.5,borderDash:[3,3],hoverRadius:3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{...tp,callbacks:{label:ctx=>' '+ctx.dataset.label+' : '+fmtM(ctx.raw)}}},
+      scales:{x:{ticks:{color:tc,font:{size:10},maxTicksLimit:dur+1},grid:{color:gc},border:{color:'transparent'}},
+              y:{ticks:{color:tc,font:{size:10},callback:v=>fmtM(v)},grid:{color:gc},border:{color:'transparent'}}}}
+  });
+
+  if(c2)c2.destroy();
+  c2=new Chart(document.getElementById('ch2'),{type:'doughnut',
+    data:{labels:active.map(a=>a.name),datasets:[{data:active.map(a=>state[a.id]),backgroundColor:active.map(a=>a.color),borderColor:'transparent',borderWidth:0,hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'70%',
+      plugins:{legend:{display:false},tooltip:{...tp,callbacks:{label:ctx=>ctx.label+' : '+ctx.raw+'%'}}}}
+  });
+
+  document.getElementById('dleg').innerHTML=active.map(a=>`
+    <div style="display:flex;align-items:center;gap:5px;min-width:0">
+      <div style="width:6px;height:6px;border-radius:50%;background:${a.color};flex-shrink:0"></div>
+      <span style="font-size:.65rem;color:#8085a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${a.name}</span>
+      <span style="font-size:.65rem;font-weight:500;color:#fff;flex-shrink:0">${state[a.id]}%</span>
+    </div>`).join('');
+
+  const bG=active.map((a,i)=>{
+    let p=cap0*wts[i];const ms=mens*wts[i];
+    for(let m=0;m<dur*12;m++){p+=ms;p*=(1+a.rate/100/12)}
+    return Math.round(p-(cap0*wts[i]+ms*12*dur));
+  });
+
+  if(c3)c3.destroy();
+  c3=new Chart(document.getElementById('ch3'),{type:'bar',
+    data:{labels:active.map(a=>a.name),datasets:[{data:bG,
+      backgroundColor:active.map(a=>a.color+'99'),borderColor:active.map(a=>a.color),
+      borderWidth:1,borderRadius:3,hoverBackgroundColor:active.map(a=>a.color)}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tp,callbacks:{label:ctx=>' Gain : '+fmtM(ctx.raw)}}},
+      scales:{x:{ticks:{color:tc,font:{size:9},maxRotation:40},grid:{display:false},border:{color:'transparent'}},
+              y:{ticks:{color:tc,font:{size:10},callback:v=>fmtM(v)},grid:{color:gc},border:{color:'transparent'}}}}
+  });
+
+  const tb=document.getElementById('btbody');tb.innerHTML='';
+  let tI=0,tB=0,tG=0,tN=0;
+  active.forEach((a,i)=>{
+    let p=cap0*wts[i];const ms=mens*wts[i];
+    for(let m=0;m<dur*12;m++){p+=ms;p*=(1+a.rate/100/12)}
+    const ia=cap0*wts[i]+ms*12*dur,ga=p-ia,na=p-ga*tax;
+    tI+=ia;tB+=p;tG+=ga;tN+=na;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><div style="display:flex;align-items:center;gap:6px">
+      <div style="width:6px;height:6px;border-radius:50%;background:${a.color};flex-shrink:0"></div>${a.name}</div></td>
+      <td>${state[a.id]}%</td><td>${a.rate}%</td>
+      <td>${fmtM(ia)}</td><td>${fmtM(p)}</td>
+      <td style="color:${ga>=0?'var(--green)':'var(--red)'}">${fmtM(ga)}</td>
+      <td style="color:var(--gold)">${fmtM(na)}</td>`;
+    tb.appendChild(tr);
+  });
+  const tr2=document.createElement('tr');tr2.className='tot';
+  tr2.innerHTML=`<td>Total portefeuille</td><td>${Math.round(tot)}%</td><td>${(avgR*100).toFixed(1)}%</td>
+    <td>${fmtM(tI)}</td><td style="color:var(--accent)">${fmtM(tB)}</td>
+    <td style="color:var(--green)">${fmtM(tG)}</td><td style="color:var(--gold)">${fmtM(tN)}</td>`;
+  tb.appendChild(tr2);
+}
+
+buildAccountTabs();
+buildAssets();
+compute();
+</script>
+</body>
+</html>

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulation Investissement Immobilier</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue:   #378ADD;
+    --red:    #E24B4A;
+    --green:  #1D9E75;
+    --gray:   #888780;
+    --dark:   #1a1917;
+    --mid:    #2e2d2b;
+    --soft:   #3d3c39;
+    --muted:  #8a8880;
+    --border: rgba(255,255,255,0.08);
+    --card:   rgba(255,255,255,0.04);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--dark);
+    color: #e8e6e0;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 3rem 4rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+
+  .header-left h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(1.8rem, 3vw, 2.8rem);
+    font-weight: 400;
+    line-height: 1.15;
+    color: #f0ece4;
+    letter-spacing: -0.02em;
+  }
+
+  .header-left h1 em {
+    font-style: italic;
+    color: var(--green);
+  }
+
+  .header-left p {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--muted);
+    max-width: 420px;
+  }
+
+  .header-badge {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  /* ── Layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    min-height: calc(100vh - 120px);
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    padding: 2rem 1.5rem;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .section-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  .slider-group { display: flex; flex-direction: column; gap: 1.4rem; }
+
+  .slider-item label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+
+  .slider-item label span:first-child {
+    font-size: 0.8rem;
+    color: #c8c4bc;
+    font-weight: 400;
+  }
+
+  .slider-item label .val {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #f0ece4;
+    font-family: 'DM Serif Display', serif;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 2px;
+    background: var(--soft);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #f0ece4;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb {
+    transform: scale(1.2);
+    background: var(--green);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #f0ece4;
+    border: none;
+    cursor: pointer;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Metric cards ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .metric {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+
+  .metric-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .metric-val {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.25rem;
+    color: #f0ece4;
+  }
+
+  .metric-val.blue  { color: var(--blue); }
+  .metric-val.green { color: var(--green); }
+  .metric-val.red   { color: var(--red); }
+
+  /* ── Content ── */
+  .content {
+    padding: 2rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .chart-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .chart-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 1rem;
+  }
+
+  .leg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .leg-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .leg-dash {
+    width: 16px;
+    height: 2px;
+    flex-shrink: 0;
+    border-top: 2px dashed;
+  }
+
+  .leg-dotted {
+    width: 16px;
+    height: 2px;
+    flex-shrink: 0;
+    border-top: 2px dotted;
+  }
+
+  .canvas-wrap { position: relative; width: 100%; }
+
+  /* ── Table ── */
+  details summary {
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s;
+  }
+
+  details summary:hover { color: #f0ece4; }
+  details summary::before { content: '▸'; font-size: 0.7rem; transition: transform 0.2s; }
+  details[open] summary::before { transform: rotate(90deg); }
+
+  .table-wrap {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+
+  thead th {
+    background: rgba(255,255,255,0.04);
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+  }
+
+  thead th:first-child { text-align: center; }
+
+  tbody tr { border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.15s; }
+  tbody tr:hover { background: rgba(255,255,255,0.03); }
+  tbody tr:last-child { border-bottom: none; }
+
+  td {
+    padding: 9px 14px;
+    text-align: right;
+    color: #c8c4bc;
+    font-variant-numeric: tabular-nums;
+  }
+
+  td:first-child {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    header { padding: 2rem 1.5rem 1.5rem; flex-direction: column; align-items: flex-start; }
+    .main { grid-template-columns: 1fr; }
+    aside { border-right: none; border-bottom: 1px solid var(--border); }
+    .content { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Simulation <em>investissement</em><br>immobilier</h1>
+    <p>Modélisez la rentabilité d'un achat immobilier — valeur nominale, valeur réelle et impact de l'inflation sur la durée de votre crédit.</p>
+  </div>
+  <div class="header-badge" id="header-badge">Crédit 20 ans · Inflation · Equity</div>
+</header>
+
+<div class="main">
+
+  <aside>
+    <div>
+      <div class="section-label">Paramètres</div>
+      <div class="slider-group">
+
+        <div class="slider-item">
+          <label>
+            <span>Prix d'achat</span>
+            <span class="val" id="o-prix">350 000 €</span>
+          </label>
+          <input type="range" id="s-prix" min="20000" max="2000000" step="10000" value="350000">
+        </div>
+
+        <div class="slider-item">
+          <label>
+            <span>Apport</span>
+            <span class="val" id="o-apport">10 %</span>
+          </label>
+          <input type="range" id="s-apport" min="5" max="40" step="1" value="10">
+        </div>
+
+        <div class="slider-item">
+          <label>
+            <span>Taux crédit</span>
+            <span class="val" id="o-taux">3.65 %</span>
+          </label>
+          <input type="range" id="s-taux" min="1" max="7" step="0.05" value="3.65">
+        </div>
+
+        <div class="slider-item">
+          <label>
+            <span>Inflation</span>
+            <span class="val" id="o-infl">2.5 %</span>
+          </label>
+          <input type="range" id="s-infl" min="0.5" max="6" step="0.1" value="2.5">
+        </div>
+
+        <div class="slider-item">
+          <label>
+            <span>Revalorisation immo</span>
+            <span class="val" id="o-immo">1.5 %</span>
+          </label>
+          <input type="range" id="s-immo" min="0" max="6" step="0.1" value="1.5">
+        </div>
+
+        <div class="slider-item">
+          <label>
+            <span>Durée du prêt</span>
+            <span class="val" id="o-duree">20 ans</span>
+          </label>
+          <input type="range" id="s-duree" min="1" max="60" step="1" value="20">
+        </div>
+
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div>
+      <div class="section-label">Résultats clés</div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Mensualité</div>
+          <div class="metric-val blue" id="c-mens">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Coût total crédit</div>
+          <div class="metric-val" id="c-cout">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label" id="label-vreal">Valeur réelle à terme</div>
+          <div class="metric-val green" id="c-vreal">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Grignoté inflation</div>
+          <div class="metric-val red" id="c-inf">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Equity finale</div>
+          <div class="metric-val green" id="c-equity">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Intérêts payés</div>
+          <div class="metric-val" id="c-interets">—</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="content">
+
+    <!-- Graphique 1 -->
+    <div class="chart-wrap">
+      <div class="chart-title">Évolution de la valeur et de l'equity</div>
+      <div class="legend">
+        <div class="leg"><div class="leg-dot" style="background:#378ADD"></div>Valeur nominale</div>
+        <div class="leg"><div class="leg-dash" style="border-color:#E24B4A"></div>Valeur réelle (− inflation)</div>
+        <div class="leg"><div class="leg-dot" style="background:#1D9E75"></div>Equity nette</div>
+        <div class="leg"><div class="leg-dotted" style="border-color:#888780"></div>Argent investi cumulé</div>
+      </div>
+      <div class="canvas-wrap" style="height:320px">
+        <canvas id="ch1"></canvas>
+      </div>
+    </div>
+
+    <!-- Graphique 2 -->
+    <div class="chart-wrap">
+      <div class="chart-title">Valeur grignotée par l'inflation — cumulé</div>
+      <div class="legend">
+        <div class="leg"><div class="leg-dot" style="background:#E24B4A"></div>Perte cumulée due à l'inflation</div>
+      </div>
+      <div class="canvas-wrap" style="height:180px">
+        <canvas id="ch2"></canvas>
+      </div>
+    </div>
+
+    <!-- Tableau -->
+    <details>
+      <summary>Tableau année par année</summary>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>An</th>
+              <th>Valeur nominale</th>
+              <th>Valeur réelle</th>
+              <th>Equity nette</th>
+              <th>Argent investi</th>
+              <th>Perte inflation</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </details>
+
+  </div>
+</div>
+
+<script>
+let chart1, chart2;
+
+function fmt(v)  { return Math.round(v).toLocaleString('fr-FR') + ' €'; }
+function fmtK(v) { return Math.round(v / 1000).toLocaleString('fr-FR') + ' k€'; }
+
+function compute() {
+  const prix     = +document.getElementById('s-prix').value;
+  const apportP  = +document.getElementById('s-apport').value;
+  const taux     = +document.getElementById('s-taux').value;
+  const infl     = +document.getElementById('s-infl').value;
+  const immo     = +document.getElementById('s-immo').value;
+  const duree    = +document.getElementById('s-duree').value;
+
+  document.getElementById('o-prix').textContent   = Math.round(prix).toLocaleString('fr-FR') + ' €';
+  document.getElementById('o-apport').textContent = apportP + ' %';
+  document.getElementById('o-taux').textContent   = (+taux).toFixed(2) + ' %';
+  document.getElementById('o-infl').textContent   = (+infl).toFixed(1) + ' %';
+  document.getElementById('o-immo').textContent   = (+immo).toFixed(1) + ' %';
+  document.getElementById('o-duree').textContent  = duree + ' ans';
+  document.getElementById('label-vreal').textContent = 'Valeur réelle à ' + duree + ' ans';
+  document.getElementById('header-badge').textContent = 'Crédit ' + duree + ' ans · Inflation · Equity';
+
+  const apport   = prix * apportP / 100;
+  const fraisNot = prix * 0.08;
+  const capital  = prix - apport;
+  const tm       = taux / 100 / 12;
+  const n        = duree * 12;
+  const mens     = capital * (tm * Math.pow(1 + tm, n)) / (Math.pow(1 + tm, n) - 1);
+
+  document.getElementById('c-mens').textContent     = fmt(mens);
+  document.getElementById('c-cout').textContent     = fmtK(mens * n);
+  document.getElementById('c-interets').textContent = fmtK(mens * n - capital);
+
+  const labels = [], vNom = [], vReal = [], eq = [], inv = [], perte = [];
+  let capRest = capital;
+
+  for (let a = 0; a <= duree; a++) {
+    const vn = prix * Math.pow(1 + immo / 100, a);
+    const vr = vn / Math.pow(1 + infl / 100, a);
+    const cd = a === 0 ? capital : Math.max(capRest, 0);
+
+    labels.push('An ' + a);
+    vNom.push(Math.round(vn / 1000 * 10) / 10);
+    vReal.push(Math.round(vr / 1000 * 10) / 10);
+    eq.push(Math.round((vn - cd) / 1000 * 10) / 10);
+    inv.push(Math.round((apport + fraisNot + mens * 12 * a) / 1000 * 10) / 10);
+    perte.push(Math.round((vn - vr) / 1000 * 10) / 10);
+
+    if (a < duree) {
+      for (let m = 0; m < 12; m++) {
+        const im = capRest * tm;
+        capRest -= (mens - im);
+      }
+    }
+  }
+
+  document.getElementById('c-vreal').textContent  = fmtK(vReal[duree] * 1000);
+  document.getElementById('c-inf').textContent    = fmtK(perte[duree] * 1000);
+  document.getElementById('c-equity').textContent = fmtK(eq[duree] * 1000);
+
+  const gridColor  = 'rgba(255,255,255,0.06)';
+  const tickColor  = '#6b6a66';
+  const baseOpts   = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: tickColor, font: { size: 11 }, maxTicksLimit: 11 }, grid: { color: gridColor }, border: { color: 'transparent' } },
+      y: { ticks: { color: tickColor, font: { size: 11 }, callback: v => v + ' k€' }, grid: { color: gridColor }, border: { color: 'transparent' } }
+    }
+  };
+
+  const data1 = {
+    labels,
+    datasets: [
+      {
+        label: 'Zone inflation',
+        data: vNom,
+        fill: { target: { value: 0 }, above: 'transparent' },
+        borderColor: 'transparent',
+        backgroundColor: 'transparent',
+        pointRadius: 0
+      },
+      {
+        label: 'Valeur nominale',
+        data: vNom,
+        borderColor: '#378ADD',
+        backgroundColor: 'rgba(55,138,221,0.06)',
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        hoverRadius: 4
+      },
+      {
+        label: 'Valeur réelle',
+        data: vReal,
+        borderColor: '#E24B4A',
+        backgroundColor: 'rgba(226,75,74,0.06)',
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        borderDash: [6, 3],
+        hoverRadius: 4
+      },
+      {
+        label: 'Equity nette',
+        data: eq,
+        borderColor: '#1D9E75',
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        hoverRadius: 4
+      },
+      {
+        label: 'Argent investi',
+        data: inv,
+        borderColor: '#888780',
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 1.5,
+        borderDash: [3, 3],
+        hoverRadius: 4
+      }
+    ]
+  };
+
+  const data2 = {
+    labels,
+    datasets: [{
+      label: 'Perte inflation',
+      data: perte,
+      backgroundColor: 'rgba(226,75,74,0.35)',
+      borderColor: '#E24B4A',
+      borderWidth: 1,
+      borderRadius: 2,
+      hoverBackgroundColor: 'rgba(226,75,74,0.55)'
+    }]
+  };
+
+  const tooltipOpts = {
+    backgroundColor: '#1e1d1b',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    titleColor: '#c8c4bc',
+    bodyColor: '#8a8880',
+    padding: 10,
+    titleFont: { family: 'DM Sans', size: 12 },
+    bodyFont: { family: 'DM Sans', size: 11 },
+    callbacks: { label: ctx => ' ' + ctx.dataset.label + ' : ' + ctx.raw + ' k€' }
+  };
+
+  if (chart1) chart1.destroy();
+  if (chart2) chart2.destroy();
+
+  chart1 = new Chart(document.getElementById('ch1'), {
+    type: 'line',
+    data: data1,
+    options: { ...baseOpts, plugins: { ...baseOpts.plugins, tooltip: { ...tooltipOpts } } }
+  });
+
+  chart2 = new Chart(document.getElementById('ch2'), {
+    type: 'bar',
+    data: data2,
+    options: {
+      ...baseOpts,
+      plugins: {
+        legend: { display: false },
+        tooltip: { ...tooltipOpts, callbacks: { label: ctx => ' Perte cumulée : ' + ctx.raw + ' k€' } }
+      }
+    }
+  });
+
+  // Tableau
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  for (let a = 0; a <= duree; a++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${a}</td>
+      <td>${Math.round(vNom[a]).toLocaleString('fr-FR')} k€</td>
+      <td>${Math.round(vReal[a]).toLocaleString('fr-FR')} k€</td>
+      <td style="color:#1D9E75">${Math.round(eq[a]).toLocaleString('fr-FR')} k€</td>
+      <td>${Math.round(inv[a]).toLocaleString('fr-FR')} k€</td>
+      <td style="color:#E24B4A">${Math.round(perte[a]).toLocaleString('fr-FR')} k€</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+['s-prix','s-apport','s-taux','s-infl','s-immo','s-duree'].forEach(id => {
+  document.getElementById(id).addEventListener('input', compute);
+});
+
+compute();
+</script>
+</body>
+</html>
