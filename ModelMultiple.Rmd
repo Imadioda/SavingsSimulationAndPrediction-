@@ -1,0 +1,418 @@
+---
+title: "ModelPredictif"
+output: html_document
+date: "2026-03-18"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+head(DTFsnp500)
+DTFsnpV2 <- DTFsnp500
+DTFsnpV2$Actif <- NULL
+DTFsnpV2$Date <- as.Date(DTFsnpV2$Date)
+```
+
+```{r}
+install.packages("ROSE")
+install.packages("randomForest")
+```
+
+```{r}
+write.csv2(DTFsnpV2, "snp500df.csv", row.names = FALSE)
+```
+
+```{r}
+library(ggplot2)
+library(factoextra)
+library(FactoMineR)
+library(corrplot)
+library(caret)
+library(dplyr)
+library(ROSE)
+library(randomForest)
+library(pROC)
+library(zoo)
+```
+
+```{r}
+DTFtotalSNP<-read.csv("snp500_enrichi.csv",sep=';',dec=',',header=TRUE)
+names(DTFtotalSNP)
+```
+
+```{r}
+dtfssdt<-DTFtotalSNP
+dtfssdt$Date=NULL
+dim(dtfssdt)
+```
+
+```{r}
+dtfssdt<-na.omit(dtfssdt)
+sum(is.na(dtfssdt))
+```
+
+```{r}
+Snprix<-dtfssdt$SNP500_Prix
+dtfssdt$SNP500_Prix=NULL
+```
+
+```{r}
+cor(Snprix,dtfssdt)
+```
+#suppression des variables non stationnaires
+
+```{r}
+dtf_model <- data.frame(
+  Date = DTFtotalSNP$Date,
+  # ── VARIABLE CIBLE ──────────────────────────────────────
+  # Variation → déjà stationnaire ✓
+  Rendement_Mensuel    = DTFtotalSNP$Rendement_Mensuel_Pct,
+  # ── MOMENTUM (déjà des variations) ──────────────────────
+  Momentum_12_1        = DTFtotalSNP$Momentum_12_1_Mois,
+  Momentum_6           = DTFtotalSNP$Momentum_6_Mois,
+  Momentum_3           = DTFtotalSNP$Momentum_3_Mois,
+  Momentum_1           = DTFtotalSNP$Momentum_1_Mois,
+  # ── MACRO : on garde les variations, pas les niveaux ────
+  Fed_Variation        = DTFtotalSNP$Fed_Taux_Variation,      # diff ✓
+  CPI_Variation        = DTFtotalSNP$CPI_Variation_Pct,       # pct ✓
+  Chomage_Variation    = DTFtotalSNP$Chomage_Variation,       # diff ✓
+  Production_Pct       = DTFtotalSNP$Production_Indus_Pct,    # pct ✓
+  Ventes_Detail_Pct    = DTFtotalSNP$Ventes_Detail_Pct,       # pct ✓
+  M2_Variation         = DTFtotalSNP$M2_Variation_Pct,        # pct ✓
+  # ── TAUX : on garde les niveaux car déjà stationnaires ──
+  # (les taux oscillent autour d'une moyenne, pas de tendance infinie)
+  Taux_10ans           = DTFtotalSNP$Taux_10ans,
+  Spread_10_2          = DTFtotalSNP$Spread_10ans_2ans,
+  Spread_10_3m         = DTFtotalSNP$Spread_10ans_3mois,
+  Credit_Spread_IG     = DTFtotalSNP$Credit_Spread_IG,
+  Credit_Spread_HY     = DTFtotalSNP$Credit_Spread_HY,
+  TED_Spread           = DTFtotalSNP$TED_Spread,
+  # ── RISQUE : niveaux stationnaires ──────────────────────
+  VIX_Niveau           = DTFtotalSNP$VIX_Niveau,
+  VIX_Variation        = DTFtotalSNP$VIX_Variation,
+  Volatilite_Realisee  = DTFtotalSNP$Volatilite_Realisee_Ann,
+  Variance_Risk_Prem   = DTFtotalSNP$Variance_Risk_Premium,
+  # ── SENTIMENT : niveaux stationnaires ───────────────────
+  Sentiment_Michigan   = DTFtotalSNP$Sentiment_Michigan,
+  Sentiment_Mich_Var   = DTFtotalSNP$Sentiment_Michigan_Var,
+  # ── EXTERNE : variations uniquement ─────────────────────
+  Petrole_Pct          = DTFtotalSNP$Petrole_WTI_Pct,         # pct ✓
+  EURUSD_Pct           = DTFtotalSNP$EURUSD_Pct,              # pct ✓
+  Taux_Hypothecaire    = DTFtotalSNP$Taux_Hypothecaire_30ans  # niveau ok
+)
+```
+
+```{r}
+dtf_model2<-dtf_model
+dtf_model2$Date=NULL
+cor(Snprix,dtf_model2)
+```
+
+```{r}
+dtf_model_clean <-dtf_model2
+# Corrélations avec le rendement mensuel uniquement
+cor_rendement <- cor(dtf_model_clean, method = "pearson")["Rendement_Mensuel", ]
+cor_rendement <- sort(cor_rendement[names(cor_rendement) != "Rendement_Mensuel"],
+                      decreasing = TRUE)
+print(round(cor_rendement, 4))
+```
+
+                                 ============MULTIPLE REG============
+```{r}
+dtf_lag <- dtf_model_clean %>%
+  mutate(across(
+    -Rendement_Mensuel,   # on ne décale pas la variable cible
+    ~ lag(., 1)           # toutes les autres sont décalées d'1 mois
+  ))
+
+dtf_lag <- na.omit(dtf_lag)
+
+# Recalcul des corrélations avec le lag
+cor_lag <- cor(dtf_lag, method = "pearson")["Rendement_Mensuel", ]
+cor_lag <- sort(cor_lag[names(cor_lag) != "Rendement_Mensuel"], decreasing = TRUE)
+print(round(cor_lag, 4))
+```
+
+```{r}
+# Vérification de la structure du dataset
+
+# ── Division Train / Test ──
+# 80% entraînement / 20% test — standard en finance quantitative
+n      <- nrow(dtf_lag)
+cut    <- floor(0.8 * n)
+train  <- dtf_lag[1:cut, ]
+test   <- dtf_lag[(cut + 1):n, ]
+cat("Total observations  :", n,    "\n")
+cat("Entraînement (80%)  :", nrow(train), "\n")
+cat("Test (20%)          :", nrow(test),  "\n")
+```
+
+```{r}
+model <- lm(Rendement_Mensuel ~ ., data = train)
+summary(model)
+```
+
+```{r}
+# ── Prédictions sur le test ──
+predictions <- predict(model, newdata = test)
+# ── Métriques de performance ──
+residus <- test$Rendement_Mensuel - predictions
+RMSE    <- sqrt(mean(residus^2))
+MAE     <- mean(abs(residus))
+R2_test <- 1 - sum(residus^2) / sum((test$Rendement_Mensuel - mean(test$Rendement_Mensuel))^2)
+cat("── Performance sur données test ──\n")
+cat("RMSE :", round(RMSE,    4), "\n")
+cat("MAE  :", round(MAE,     4), "\n")
+cat("R²   :", round(R2_test, 4), "\n")
+# ── Visualisation prédictions vs réel ──
+plot(test$Rendement_Mensuel, type = "l", col = "steelblue",
+     main = "Réel vs Prédit — Rendement mensuel S&P 500",
+     ylab = "Rendement (%)", xlab = "Observations test")
+lines(predictions, col = "firebrick", lty = 2)
+legend("topright", legend = c("Réel", "Prédit"),
+       col = c("steelblue", "firebrick"), lty = c(1, 2)) 
+#model abominable
+```
+
+                                      ============LOGISTIC REG============
+
+```{r}
+# ── 1. Création de la variable cible binaire ──────────────────
+# 1 = le S&P monte ce mois-ci, 0 = il baisse
+dtf_lag$Hausse <- ifelse(dtf_lag$Rendement_Mensuel > 0, 1, 0)
+dtf_lag$Rendement_Mensuel <- NULL   # on retire la cible continue
+
+cat("Distribution de la variable cible :\n")
+print(table(dtf_lag$Hausse))
+cat("Proportion hausse :", round(mean(dtf_lag$Hausse), 3), "\n\n")
+
+# ── 2. Split Train / Test (80/20 chronologique) ──────────────
+n     <- nrow(dtf_lag)
+cut   <- floor(0.8 * n)
+train <- dtf_lag[1:cut, ]
+test  <- dtf_lag[(cut + 1):n, ]
+
+cat("Observations totales  :", n, "\n")
+cat("Entraînement (80%)    :", nrow(train), "\n")
+cat("Test (20%)            :", nrow(test), "\n\n")
+
+# ── 3. Modèle logistique ──────────────────────────────────────
+model_log <- glm(Hausse ~ ., data = train, family = binomial(link = "logit"))
+summary(model_log)
+
+# ── 4. Prédictions sur le test ────────────────────────────────
+prob_pred  <- predict(model_log, newdata = test, type = "response")
+class_pred <- ifelse(prob_pred >= 0.5, 1, 0)
+```
+
+```{r}
+# ── 5. Métriques de performance ──────────────────────────────
+library(caret)
+
+conf_mat <- confusionMatrix(
+  factor(class_pred, levels = c(0, 1)),
+  factor(test$Hausse,  levels = c(0, 1)),
+  positive = "1"
+)
+print(conf_mat)
+
+# Accuracy manuelle pour vérif
+accuracy <- mean(class_pred == test$Hausse)
+cat("\nAccuracy :", round(accuracy, 4), "\n")
+```
+
+```{r}
+# ── 6. Courbe ROC + AUC ──────────────────────────────────────
+library(pROC)
+
+roc_obj <- roc(test$Hausse, prob_pred)
+auc_val <- auc(roc_obj)
+cat("AUC :", round(auc_val, 4), "\n")
+
+plot(roc_obj,
+     col  = "steelblue", lwd = 2,
+     main = paste("Courbe ROC — AUC =", round(auc_val, 3)),
+     xlab = "Taux faux positifs (1 - Spécificité)",
+     ylab = "Taux vrais positifs (Sensibilité)")
+abline(a = 0, b = 1, lty = 2, col = "gray60")   # ligne aléatoire
+```
+
+
+```{r}
+# ── 7. Probabilités prédites vs réalité ──────────────────────
+plot(prob_pred, col = ifelse(test$Hausse == 1, "steelblue", "firebrick"),
+     pch  = 19, cex = 0.8,
+     ylim = c(0, 1),
+     main = "Probabilités prédites — Bleu = hausse réelle, Rouge = baisse réelle",
+     xlab = "Observations test", ylab = "P(Hausse)")
+abline(h = 0.5, lty = 2, col = "gray40")
+```
+
+```{r}
+# ── 8. Importance des variables (coefficients) ───────────────
+coef_df <- data.frame(
+  Variable = names(coef(model_log))[-1],
+  Coef     = coef(model_log)[-1]
+) %>%
+  arrange(desc(abs(Coef)))
+
+barplot(coef_df$Coef,
+        names.arg = coef_df$Variable,
+        las = 2, cex.names = 0.7,
+        col = ifelse(coef_df$Coef > 0, "steelblue", "firebrick"),
+        main = "Coefficients logistiques (impact sur P(Hausse))",
+        ylab = "Coefficient")
+abline(h = 0, col = "black")
+```
+
+```{r}
+# ── 9. Matrice de confusion visuelle ─────────────────────────
+conf_table <- table(Prédit = class_pred, Réel = test$Hausse)
+print(conf_table) #model abominable
+```
+
+                                      ============RANDOM FOREST============
+
+```{r}
+dtf_lag_clean$Rendement_Mensuel <- dtf_model$Rendement_Mensuel
+```
+
+
+```{r}
+# BLOC 2 — Nettoyage des NA (AVANT tout le reste)
+dtf_model_clean<-dtf_lag_clean
+ cols_num <- sapply(dtf_lag_clean, is.numeric)
+
+# Interpolation temporelle
+# Remplacez na.approx par na.locf (Last Observation Carried Forward)
+dtf_lag_clean[cols_num] <- lapply(
+  dtf_lag_clean[cols_num],
+  function(x) na.locf(x, na.rm = FALSE)
+)
+# Médiane pour les NA résiduels (bords de série)
+dtf_lag_clean[cols_num] <- lapply(
+  dtf_lag_clean[cols_num],
+  function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x)
+)
+
+cat("NA restants :", sum(is.na(dtf_lag_clean)), "\n")
+cat("Observations :", nrow(dtf_lag_clean), "\n")
+```
+
+```{r}
+# BLOC 3 — Variable cible binaire (APRÈS nettoyage)
+dtf_lag_clean$Hausse <- factor(
+  ifelse(dtf_lag_clean$Rendement_Mensuel > 0, "Hausse", "Baisse"),
+  levels = c("Baisse", "Hausse")
+)
+dtf_lag_clean$Rendement_Mensuel <- NULL
+
+print(table(dtf_lag_clean$Hausse))
+
+cat("Proportion hausse :", round(mean(dtf_lag_clean$Hausse == "Hausse"), 3), "\n")
+```
+
+
+```{r}
+# BLOC 4 — Split chronologique 80/20
+n    <- nrow(dtf_lag_clean)
+cut  <- floor(0.8 * n)
+train <- dtf_lag_clean[1:cut, ]
+test  <- dtf_lag_clean[(cut + 1):n, ]
+
+cat("Train :", nrow(train), "obs\n")
+cat("Test  :", nrow(test),  "obs\n")
+cat("NA dans train :", sum(is.na(train)), "\n")
+cat("NA dans test  :", sum(is.na(test)),  "\n")
+```
+
+```{r}
+# BLOC 5 — Random Forest initial
+set.seed(42)
+
+rf_model <- randomForest(
+  Hausse ~ .,
+  data       = train,
+  ntree      = 500,
+  mtry       = 5,
+  classwt    = c("Baisse" = 2, "Hausse" = 1),
+  importance = TRUE,
+  nodesize   = 20
+)
+
+print(rf_model)
+```
+
+```{r}
+# BLOC 6 — Tuning du mtry avec walk-forward CV
+ctrl <- trainControl(
+  method          = "timeslice",
+  initialWindow   = 80,
+  horizon         = 10,
+  fixedWindow     = FALSE,
+  summaryFunction = twoClassSummary,
+  classProbs      = TRUE,
+  savePredictions = TRUE
+)
+
+grid <- expand.grid(mtry = c(3, 4, 5, 6, 8, 10))
+
+set.seed(42)
+rf_tuned <- train(
+  Hausse ~ .,
+  data      = train,
+  method    = "rf",
+  trControl = ctrl,
+  tuneGrid  = grid,
+  metric    = "ROC",
+  ntree     = 300
+)
+
+print(rf_tuned)
+plot(rf_tuned, main = "AUC selon mtry")
+
+best_mtry <- rf_tuned$bestTune$mtry
+cat("Meilleur mtry :", best_mtry, "\n")
+```
+
+```{r}
+# BLOC 7 — Modèle final avec best_mtry
+set.seed(42)
+
+rf_final <- randomForest(
+  Hausse ~ .,
+  data       = train,
+  ntree      = 1000,
+  mtry       = best_mtry,
+  classwt    = c("Baisse" = 2, "Hausse" = 1),
+  importance = TRUE,
+  nodesize   = 20
+)
+
+print(rf_final)
+```
+
+```{r}
+# BLOC 8 — Évaluation sur le test
+pred_class <- predict(rf_final, newdata = test)
+pred_prob  <- predict(rf_final, newdata = test, type = "prob")[, "Hausse"]
+
+# Matrice de confusion
+cm <- confusionMatrix(pred_class, test$Hausse, positive = "Hausse")
+print(cm)
+
+# AUC
+roc_obj <- roc(as.numeric(test$Hausse == "Hausse"), pred_prob)
+cat("\nAUC :", round(auc(roc_obj), 4), "\n")
+
+# Courbe ROC
+plot(roc_obj, col = "steelblue", lwd = 2,
+     main = paste("Courbe ROC — AUC =", round(auc(roc_obj), 3)))
+abline(a = 0, b = 1, lty = 2, col = "gray60")
+```
+
+```{r}
+summary(rf_final)
+```
+

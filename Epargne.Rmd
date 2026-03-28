@@ -1,0 +1,617 @@
+---
+title: "ReproductionEprgn"
+output: html_document
+date: "2026-03-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(factoextra)
+library(FactoMineR)
+library(corrplot)
+library(caret)
+library(dplyr)
+```
+
+```{r}
+install.packages("tidyverse")
+```
+
+```{r}
+library(tidyverse)
+library(scales)
+library(reshape2)  # pour transformer les données en format long
+```
+
+```{r}
+DTFsnp500<-read.csv("sp500.csv",dec='.',sep=',',header = TRUE)
+DTFcac40<-read.csv("cac40.csv",dec='.',sep=',',header = TRUE)
+DTFgold<-read.csv("gold.csv",dec='.',sep=',',header = TRUE)
+DTFcash<-read.csv("eurusd.csv",dec='.',sep=',',header = TRUE)
+DTFbitcoin<-read.csv("bitcoin.csv",dec='.',sep=',',header=TRUE)
+LivretA<-2.3
+Portefeuilrebalancé<-10
+```
+
+```{r}
+lapply(list(DTFsnp500, DTFbitcoin, DTFcac40, DTFcash, DTFgold), head)
+```
+
+```{r}
+DTFsnp500$High <- as.numeric(DTFsnp500$High)
+DTFsnp500$Low  <- as.numeric(DTFsnp500$Low)
+DTFsnp500$Moy  <- (DTFsnp500$High + DTFsnp500$Low) / 2
+DTFsnp500 <- DTFsnp500[, c("Price", "Moy")]
+```
+
+```{r}
+colnames(DTFsnp500)[which(colnames(DTFsnp500) == "Price")] <- "Date"
+DTFsnp500<-DTFsnp500[-c(1,2),]
+na.omit(DTFsnp500)
+head(DTFsnp500)
+```
+
+```{r}
+
+# --- CAC40 ---
+DTFcac40$High <- as.numeric(DTFcac40$High)
+DTFcac40$Low  <- as.numeric(DTFcac40$Low)
+DTFcac40$Moy  <- (DTFcac40$High + DTFcac40$Low) / 2
+DTFcac40 <- DTFcac40[, c("Price", "Moy")]
+colnames(DTFcac40)[which(colnames(DTFcac40) == "Price")] <- "Date"
+DTFcac40 <- DTFcac40[-c(1,2),]
+DTFcac40 <- na.omit(DTFcac40)
+DTFcac40$Date <- as.Date(DTFcac40$Date)
+head(DTFcac40)
+
+# --- Gold ---
+DTFgold$High <- as.numeric(DTFgold$High)
+DTFgold$Low  <- as.numeric(DTFgold$Low)
+DTFgold$Moy  <- (DTFgold$High + DTFgold$Low) / 2
+DTFgold <- DTFgold[, c("Price", "Moy")]
+colnames(DTFgold)[which(colnames(DTFgold) == "Price")] <- "Date"
+DTFgold <- DTFgold[-c(1,2),]
+DTFgold <- na.omit(DTFgold)
+DTFgold$Date <- as.Date(DTFgold$Date)
+head(DTFgold)
+
+# --- EUR/USD ---
+DTFcash$High <- as.numeric(DTFcash$High)
+DTFcash$Low  <- as.numeric(DTFcash$Low)
+DTFcash$Moy  <- (DTFcash$High + DTFcash$Low) / 2
+DTFcash <- DTFcash[, c("Price", "Moy")]
+colnames(DTFcash)[which(colnames(DTFcash) == "Price")] <- "Date"
+DTFcash <- DTFcash[-c(1,2),]
+DTFcash <- na.omit(DTFcash)
+DTFcash$Date <- as.Date(DTFcash$Date)
+head(DTFcash)
+
+# --- Bitcoin ---
+DTFbitcoin$High <- as.numeric(DTFbitcoin$High)
+DTFbitcoin$Low  <- as.numeric(DTFbitcoin$Low)
+DTFbitcoin$Moy  <- (DTFbitcoin$High + DTFbitcoin$Low) / 2
+DTFbitcoin <- DTFbitcoin[, c("Price", "Moy")]
+colnames(DTFbitcoin)[which(colnames(DTFbitcoin) == "Price")] <- "Date"
+DTFbitcoin <- DTFbitcoin[-c(1,2),]
+DTFbitcoin <- na.omit(DTFbitcoin)
+DTFbitcoin$Date <- as.Date(DTFbitcoin$Date)
+head(DTFbitcoin)
+```
+
+```{r}
+# Ajouter un nom à chaque DTF (sauf Bitcoin)
+DTFsnp500$Actif <- "S&P500"
+DTFcac40$Actif <- "CAC40"
+DTFgold$Actif <- "Gold"
+DTFcash$Actif <- "EUR/USD"
+```
+
+```{r}
+# Combiner tous les DTF
+DTFall <- rbind(DTFsnp500, DTFcac40, DTFgold, DTFcash)
+```
+
+```{r}
+# Définir la plage X et Y
+date_min <- min(DTFall$Date, na.rm=TRUE)
+date_max <- max(DTFall$Date, na.rm=TRUE)
+y_min <- min(DTFall$Moy, na.rm=TRUE) * 0.95
+y_max <- max(DTFall$Moy, na.rm=TRUE) * 1.05
+```
+
+```{r}
+# Tracer le graphique
+p <- ggplot(DTFall, aes(x=Date, y=Moy, color=Actif)) +
+  geom_line(size=1) +
+  labs(title="Évolution du prix moyen des actifs",
+       x="Date",
+       y="Prix moyen",
+       color="Actif") +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=16, face="bold"),
+        axis.title=element_text(size=14),
+        axis.text=element_text(size=12),
+        axis.text.x = element_text(angle = 90, vjust=0.5, hjust=1, size=8), # taille réduite
+        legend.title=element_text(size=12),
+        legend.text=element_text(size=11)) +
+  scale_color_manual(values=c("S&P500"="red",
+                              "CAC40"="green",
+                              "Gold"="gold",
+                              "EUR/USD"="blue")) +
+  scale_x_date(limits = c(date_min, date_max),
+               date_breaks = "1 year",
+               date_labels = "%Y") +
+  expand_limits(y = c(y_min, y_max))
+
+print(p)
+```
+
+```{r}
+ggsave("evolution_actifs.png", plot = p, width = 12, height = 6, dpi = 300)
+```
+
+```{r}
+DTFcash$Moy[43] <- 1.32
+
+```
+
+```{r}
+# install.packages(c("ggplot2", "dplyr"))
+df_inflation <- data.frame(
+  Annee = 2002:2025,
+  Inflation_pct = c(1.9,2.1,2.1,1.7,1.7,1.5,2.8,0.1,1.5, 2.1, 2.0, 0.9, 0.5, 0.0, 0.2, 1.0, 1.8, 1.1, 0.5, 1.6, 5.2, 4.9, 2.5, 1.5)
+)
+```
+
+```{r}
+# 2. Paramètres initiaux
+capital_initial <- 10000
+# 3. Calcul de la perte de pouvoir d'achat
+df_inflation <- df_inflation %>%
+  mutate(
+    # On calcule un indice cumulé (combien coûtent les choses par rapport à l'année de départ)
+    Indice_Cumule = cumprod(1 + (Inflation_pct / 100)),
+    
+    # On divise le capital par l'indice cumulé pour obtenir la valeur réelle
+    Valeur_Reelle_Euros = capital_initial / Indice_Cumule
+  )
+# 4. Paramétrage du graphique superposé
+# Facteur de transformation pour l'axe secondaire. 
+# Si l'inflation max est ~5%, on veut qu'elle s'affiche correctement sur un axe qui va jusqu'à 10 000.
+facteur_echelle <- 1500 
+# 5. Création du graphique avec ggplot2
+ggplot(df_inflation, aes(x = Annee)) +
+  # A. Histogramme pour l'inflation annuelle (en fond)
+  # On multiplie par le facteur d'échelle pour l'aligner sur l'axe de gauche
+  geom_col(aes(y = Inflation_pct * facteur_echelle), fill = "steelblue", alpha = 0.4) +
+  # B. Courbe pour la valeur réelle de l'argent (Perte de pouvoir d'achat)
+  geom_line(aes(y = Valeur_Reelle_Euros), color = "firebrick", linewidth = 1) +
+  geom_point(aes(y = Valeur_Reelle_Euros), color = "firebrick", size = 2) +
+  # C. Configuration du double axe Y
+  scale_y_continuous(
+    name = "Pouvoir d'achat réel (en €)",
+    limits = c(0, 11000), # Fixer l'axe de gauche
+    # Création de l'axe de droite en divisant par le facteur d'échelle
+    sec.axis = sec_axis(~ . / facteur_echelle, name = "Taux d'inflation annuel (%)")
+  ) +
+  # D. Esthétique générale
+  labs(
+    title = "Impact de l'inflation sur le pouvoir d'achat d'un capital de 10 000 €",
+    x = "Année",
+    caption = "Source des données : INSEE (Exemple)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.y.left = element_text(color = "firebrick", face = "bold"),
+    axis.title.y.right = element_text(color = "steelblue", face = "bold")
+  )
+```
+
+```{r}
+ggsave(
+  filename = "evolution_pouvoir_achat.png", # L'extension définit le format
+  plot = graphique_inflation,               # L'objet à sauvegarder
+  width = 10,                               # Largeur de l'image (en pouces par défaut)
+  height = 6,                               # Hauteur de l'image
+  dpi = 300                                 # Résolution pour une qualité d'impression
+)
+```
+
+```{r}
+data<-read.csv("savings_data.csv",sep=';',dec=',',header = TRUE)
+head(data)
+```
+
+```{r}
+#  SIMULATION D'ÉPARGNE - 300€/mois pendant 40 ans
+#  Taux : S&P500 9% | CAC40 7% | Or 6% | Livret A 2.3% | CC 0%
+#  Inflation : 4%
+
+# ── 1. PARAMÈTRES ────────────────────────────────────────────
+mensualite   <- 300
+annuite      <- mensualite * 12   # 3 600 €
+n_annees     <- 40
+inflation    <- 0.03
+taux <- c(
+  "S&P 500"        = 0.09,
+  "CAC 40"         = 0.07,
+  "Or"             = 0.06,
+  "Livret A"       = 0.023,
+  "Compte courant" = 0.00
+)
+couleurs <- c(
+  "S&P 500"        = "#2196F3",
+  "CAC 40"         = "#4CAF50",
+  "Or"             = "#FFC107",
+  "Livret A"       = "#9C27B0",
+  "Compte courant" = "#F44336"
+)
+```
+
+```{r}
+# ── 2. SIMULATION ANNÉE PAR ANNÉE ────────────────────────────
+simulate <- function(taux_nominal, inflation, annuite, n) {
+  portfolio <- 0
+  res <- numeric(n)
+  for (i in seq_len(n)) {
+    portfolio <- (portfolio + annuite) * (1 + taux_nominal)
+    res[i] <- portfolio
+  }
+  # Valeur réelle (pouvoir d'achat)
+  res_reel <- res / (1 + inflation)^seq_len(n)
+  list(nominal = res, reel = res_reel)
+}
+
+# Construction du dataframe long
+df_list <- lapply(names(taux), function(nom) {
+  sim <- simulate(taux[nom], inflation, annuite, n_annees)
+  data.frame(
+    annee          = 1:n_annees,
+    profil         = nom,
+    valeur_nominale = sim$nominal,
+    valeur_reelle  = sim$reel
+  )
+})
+
+df <- bind_rows(df_list)
+df$profil <- factor(df$profil, levels = names(taux))
+
+# Montant total investi
+investi <- annuite * 1:n_annees
+df$investi <- investi[df$annee]
+```
+
+```{r}
+# ── 3. THÈME COMMUN ──────────────────────────────────────────
+theme_epargne <- theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.subtitle    = element_text(hjust = 0.5, color = "grey40", size = 11),
+    plot.caption     = element_text(color = "grey55", size = 9),
+    legend.position  = "bottom",
+    legend.title     = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title       = element_text(size = 11),
+    strip.text       = element_text(face = "bold"))
+```
+
+```{r}
+# ── 4. GRAPHIQUE 1 : Évolution valeur nominale ───────────────
+p1 <- ggplot(df, aes(x = annee, y = valeur_nominale / 1e3, color = profil)) +
+  geom_line(linewidth = 1.2) +
+  geom_line(aes(y = investi / 1e3), color = "black", linetype = "dashed",
+            linewidth = 0.8, data = df %>% distinct(annee, investi)) +
+  annotate("text", x = 38, y = (annuite * 40 / 1e3) + 15,
+           label = "Capital\ninvesti", size = 3.5, color = "black") +
+  scale_color_manual(values = couleurs) +
+  scale_y_continuous(labels = label_dollar(prefix = "", suffix = " k€")) +
+  scale_x_continuous(breaks = seq(0, 40, 5)) +
+  labs(
+    title    = "Évolution de l'épargne sur 40 ans (valeur nominale)",
+    subtitle = "300 €/mois | Inflation 4% non déduite",
+    x        = "Années",
+    y        = "Valeur du portefeuille",
+    caption  = "Versements annuels de 3 600 € en fin d'année"
+  ) + theme_epargne
+```
+
+```{r}
+
+# ── 5. GRAPHIQUE 2 : Évolution valeur réelle ─────────────────
+p2 <- ggplot(df, aes(x = annee, y = valeur_reelle / 1e3, color = profil)) +
+  geom_line(linewidth = 1.2) +
+  geom_line(aes(y = investi / 1e3), color = "black", linetype = "dashed",
+            linewidth = 0.8, data = df %>% distinct(annee, investi)) +
+  annotate("text", x = 38, y = (annuite * 40 / 1e3) + 5,
+           label = "Capital\ninvesti", size = 3.5, color = "black") +
+  scale_color_manual(values = couleurs) +
+  scale_y_continuous(labels = label_dollar(prefix = "", suffix = " k€")) +
+  scale_x_continuous(breaks = seq(0, 40, 5)) +
+  labs(
+    title    = "Évolution de l'épargne sur 40 ans (valeur réelle)",
+    subtitle = "300 €/mois | Inflation 4% déduite – pouvoir d'achat constant",
+    x        = "Années",
+    y        = "Valeur réelle du portefeuille",
+    caption  = "Valeurs deflactées par (1.04)^n"
+  ) +
+  theme_epargne
+```
+
+```{r}
+# ── 6. GRAPHIQUE 3 : Bar plot – Capital final net ────────────
+df_final <- df %>%
+  filter(annee == n_annees) %>%
+  select(profil, valeur_nominale, valeur_reelle, investi) %>%
+  mutate(
+    gain_nominal = valeur_nominale - investi,
+    gain_reel    = valeur_reelle  - investi
+  )
+
+df_bar <- df_final %>%
+  select(profil, valeur_nominale, valeur_reelle) %>%
+  pivot_longer(cols = c(valeur_nominale, valeur_reelle),
+               names_to = "type", values_to = "valeur") %>%
+  mutate(type = recode(type,
+    valeur_nominale = "Valeur nominale",
+    valeur_reelle   = "Valeur réelle (après inflation)"
+  ))
+
+capital_investi_val <- annuite * n_annees  # 144 000 €
+
+p3 <- ggplot(df_bar, aes(x = profil, y = valeur / 1e3, fill = profil, alpha = type)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_hline(yintercept = capital_investi_val / 1e3,
+             linetype = "dashed", color = "black", linewidth = 0.9) +
+  annotate("text", x = 0.5, y = capital_investi_val / 1e3 + 8,
+           label = paste0("Capital investi : ", capital_investi_val / 1e3, " k€"),
+           hjust = 0, size = 3.5, color = "black") +
+  scale_fill_manual(values = couleurs) +
+  scale_alpha_manual(values = c("Valeur nominale" = 1, "Valeur réelle (après inflation)" = 0.55)) +
+  scale_y_continuous(labels = label_dollar(prefix = "", suffix = " k€")) +
+  labs(
+    title    = "Capital final après 40 ans par profil",
+    subtitle = "Barre foncée = valeur nominale | Barre claire = valeur réelle",
+    x        = NULL,
+    y        = "Valeur finale",
+    fill     = NULL,
+    alpha    = NULL,
+    caption  = "Ligne pointillée = 144 000 € investis"
+  ) +
+  theme_epargne +
+  theme(legend.position = "top")
+```
+
+```{r}
+# ── 7. GRAPHIQUE 4 : Bar plot – Gain / Perte ─────────────────
+df_gain <- df_final %>%
+  select(profil, gain_nominal, gain_reel) %>%
+  pivot_longer(cols = c(gain_nominal, gain_reel),
+               names_to = "type", values_to = "gain") %>%
+  mutate(
+    type    = recode(type,
+      gain_nominal = "Gain nominal",
+      gain_reel    = "Gain réel (après inflation)"
+    ),
+    positif = gain >= 0
+  )
+
+p4 <- ggplot(df_gain, aes(x = profil, y = gain / 1e3, fill = interaction(positif, type))) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.7) +
+  scale_fill_manual(
+    values = c(
+      "TRUE.Gain nominal"                    = "#1565C0",
+      "TRUE.Gain réel (après inflation)"     = "#90CAF9",
+      "FALSE.Gain nominal"                   = "#C62828",
+      "FALSE.Gain réel (après inflation)"    = "#EF9A9A"
+    ),
+    labels = c(
+      "TRUE.Gain nominal"                    = "Gain nominal",
+      "TRUE.Gain réel (après inflation)"     = "Gain réel",
+      "FALSE.Gain nominal"                   = "Perte nominale",
+      "FALSE.Gain réel (après inflation)"    = "Perte réelle"
+    )
+  ) +
+  scale_y_continuous(labels = label_dollar(prefix = "", suffix = " k€")) +
+  labs(
+    title    = "Gain ou perte net après 40 ans par profil",
+    subtitle = "Par rapport aux 144 000 € investis",
+    x        = NULL,
+    y        = "Gain / Perte",
+    fill     = NULL,
+    caption  = "Bleu foncé = gain nominal | Bleu clair = gain réel | Rouge = perte"
+  ) +
+  theme_epargne
+```
+
+```{r}
+# ── 8. AFFICHAGE ──────────────────────────────────────────────
+print(p1)
+print(p2)
+print(p3)
+print(p4)
+```
+
+```{r}
+# ── 9. SAUVEGARDE (optionnel) ────────────────────────────────
+ggsave("p1_evolution_nominale.png",  p1, width = 10, height = 6, dpi = 150)
+ggsave("p2_evolution_reelle.png",    p2, width = 10, height = 6, dpi = 150)
+ggsave("p3_capital_final.png",       p3, width = 10, height = 6, dpi = 150)
+ggsave("p4_gain_perte.png",          p4, width = 10, height = 6, dpi = 150)
+
+# ── 10. TABLEAU RÉCAPITULATIF ────────────────────────────────
+cat("\n===== RÉCAPITULATIF FINAL (année 40) =====\n")
+cat(sprintf("Capital investi total : %s €\n\n", format(capital_investi_val, big.mark = " ")))
+
+df_final %>%
+  mutate(across(where(is.numeric), ~ round(., 0))) %>%
+  select(Profil = profil,
+         `Valeur nominale (€)` = valeur_nominale,
+         `Valeur réelle (€)`   = valeur_reelle,
+         `Gain nominal (€)`    = gain_nominal,
+         `Gain réel (€)`       = gain_reel) %>%
+  as.data.frame() %>%
+  print(row.names = FALSE)
+```
+Recuperation variables descriptives de l'evolution des actifs selon les familles puis on ajoute levlolution des actifs dans ce meme dtf en fonction des mois/annees ,on peut aussi ajouter une variable infation
+on a df inflation de 2002 a 2025 
+
+```{r}
+# ══════════════════════════════════════════════════════════════
+# SIMULATION INVESTISSEMENT IMMOBILIER — BANLIEUE PARISIENNE
+# Crédit sur 20 ans — Impact de l'inflation sur la valeur réelle (pour plus de details et pousser la simulation plus loin, voir le site joint a ce projet)
+# ══════════════════════════════════════════════════════════════
+
+# ── Paramètres ────────────────────────────────────────────────
+prix_achat       <- 350000   # Prix moyen banlieue proche parisienne (€)
+apport           <- 35000    # Apport 10%
+capital_emprunte <- prix_achat - apport
+taux_credit      <- 0.0365   # Taux moyen crédit immo 2024 (~3.65%)
+duree_ans        <- 20
+inflation        <- 0.025    # Inflation moyenne France long terme (2.5%)
+hausse_immo      <- 0.015    # Revalorisation immo banlieue parisienne (1.5%/an)
+frais_notaire    <- prix_achat * 0.08   # 8% frais de notaire
+cout_total_achat <- prix_achat + frais_notaire
+
+# ── Mensualité (formule crédit amortissable) ──────────────────
+taux_mensuel  <- taux_credit / 12
+n_mois        <- duree_ans * 12
+mensualite    <- capital_emprunte * (taux_mensuel * (1 + taux_mensuel)^n_mois) /
+                 ((1 + taux_mensuel)^n_mois - 1)
+
+cat("══ Paramètres du crédit ══════════════════\n")
+cat("Prix d'achat        :", format(prix_achat, big.mark=" "), "€\n")
+cat("Frais de notaire    :", format(round(frais_notaire), big.mark=" "), "€\n")
+cat("Coût total entrée   :", format(round(cout_total_achat), big.mark=" "), "€\n")
+cat("Capital emprunté    :", format(capital_emprunte, big.mark=" "), "€\n")
+cat("Mensualité          :", format(round(mensualite, 2), big.mark=" "), "€\n")
+cat("Coût total crédit   :", format(round(mensualite*n_mois), big.mark=" "), "€\n")
+cat("Intérêts payés total:", format(round(mensualite*n_mois - capital_emprunte), big.mark=" "), "€\n\n")
+
+# ── Tableau annuel ─────────────────────────────────────────────
+annees      <- 0:duree_ans
+capital_restant <- capital_emprunte
+
+valeur_nominale  <- numeric(duree_ans + 1)  # valeur du bien en euros courants
+valeur_reelle    <- numeric(duree_ans + 1)  # valeur corrigée de l'inflation
+capital_rembourse <- numeric(duree_ans + 1) # capital remboursé cumulé
+interets_cumules <- numeric(duree_ans + 1)  # intérêts payés cumulés
+argent_investi   <- numeric(duree_ans + 1)  # argent sorti de poche total
+
+# Année 0 : situation initiale
+valeur_nominale[1]   <- prix_achat
+valeur_reelle[1]     <- prix_achat
+capital_rembourse[1] <- 0
+interets_cumules[1]  <- 0
+argent_investi[1]    <- apport + frais_notaire
+
+cap_rest <- capital_emprunte
+
+for (a in 1:duree_ans) {
+  # Amortissement mensuel sur l'année
+  interets_annee <- 0
+  capital_annee  <- 0
+  
+  for (m in 1:12) {
+    interet_mois  <- cap_rest * taux_mensuel
+    capital_mois  <- mensualite - interet_mois
+    interets_annee <- interets_annee + interet_mois
+    capital_annee  <- capital_annee  + capital_mois
+    cap_rest       <- cap_rest - capital_mois
+  }
+  
+  valeur_nominale[a+1]   <- prix_achat * (1 + hausse_immo)^a
+  valeur_reelle[a+1]     <- valeur_nominale[a+1] / (1 + inflation)^a
+  capital_rembourse[a+1] <- capital_emprunte - max(cap_rest, 0)
+  interets_cumules[a+1]  <- interets_cumules[a] + interets_annee
+  argent_investi[a+1]    <- apport + frais_notaire + mensualite * 12 * a
+}
+
+# Équité nette = valeur bien - capital restant dû
+capital_du     <- pmax(capital_emprunte - capital_rembourse, 0)
+equity_nette   <- valeur_nominale - capital_du
+equity_reelle  <- valeur_reelle   - capital_du   # valeur réelle - dette
+
+# ── Tableau récapitulatif ──────────────────────────────────────
+df_result <- data.frame(
+  Annee             = annees,
+  Valeur_Nominale   = round(valeur_nominale),
+  Valeur_Reelle     = round(valeur_reelle),
+  Perte_Inflation   = round(valeur_nominale - valeur_reelle),
+  Capital_Du        = round(capital_du),
+  Equity_Nette      = round(equity_nette),
+  Equity_Reelle     = round(equity_reelle),
+  Argent_Investi    = round(argent_investi)
+)
+print(df_result)
+```
+
+```{r}
+# ── Visualisation ─────────────────────────────────────────────
+mar = c(4, 5, 3, 1)
+
+# Graphique 1 : Valeur nominale vs réelle
+plot(annees, valeur_nominale / 1000, type = "l", col = "#378ADD",
+     lwd = 2.5, ylim = c(200, max(valeur_nominale)/1000 * 1.05),
+     xlab = "Année", ylab = "Valeur (k€)",
+     main = "Valeur nominale vs réelle du bien")
+lines(annees, valeur_reelle / 1000, col = "#E24B4A", lwd = 2.5, lty = 2)
+polygon(c(annees, rev(annees)),
+        c(valeur_nominale/1000, rev(valeur_reelle/1000)),
+        col = rgb(0.89, 0.29, 0.29, 0.12), border = NA)
+legend("topleft", legend = c("Valeur nominale", "Valeur réelle (- inflation)"),
+       col = c("#378ADD", "#E24B4A"), lty = c(1, 2), lwd = 2, cex = 0.8)
+```
+
+```{r}
+# Graphique 2 : Argent investi vs equity nette
+plot(annees, argent_investi / 1000, type = "l", col = "#888780",
+     lwd = 2, ylim = c(0, max(argent_investi, equity_nette)/1000 * 1.1),
+     xlab = "Année", ylab = "Montant (k€)",
+     main = "Argent sorti de poche vs equity nette")
+lines(annees, equity_nette / 1000, col = "#1D9E75", lwd = 2.5)
+lines(annees, equity_reelle / 1000, col = "#639922", lwd = 2, lty = 2)
+abline(h = 0, col = "gray60", lty = 3)
+legend("topleft",
+       legend = c("Argent investi total", "Equity nominale", "Equity réelle"),
+       col    = c("#888780", "#1D9E75", "#639922"),
+       lty    = c(1, 1, 2), lwd = 2, cex = 0.8)
+```
+
+```{r}
+# Graphique 3 : Décomposition capital dû vs equity
+barplot(rbind(capital_du[annees %% 4 == 0] / 1000,
+              equity_nette[annees %% 4 == 0] / 1000),
+        names.arg = annees[annees %% 4 == 0],
+        col = c("#F09595", "#9FE1CB"),
+        xlab = "Année", ylab = "Montant (k€)",
+        main = "Capital dû vs équité (tous les 4 ans)",
+        legend.text = c("Capital restant dû", "Équité nette"),
+        args.legend = list(x = "topleft", cex = 0.8))
+```
+
+```{r}
+# Graphique 4 : Grignotage annuel de l'inflation
+perte_inflation <- valeur_nominale - valeur_reelle
+plot(annees, perte_inflation / 1000, type = "l", col = "#E24B4A",
+     lwd = 2.5, xlab = "Année", ylab = "Perte cumulée (k€)",
+     main = "Valeur grignotée par l'inflation (cumulé)")
+polygon(c(annees, rev(annees)),
+        c(perte_inflation / 1000, rep(0, length(annees))),
+        col = rgb(0.89, 0.29, 0.29, 0.15), border = NA)
+abline(h = 0, col = "gray60", lty = 3)
+
+cat("\n══ Bilan à 20 ans ═══════════════════════════════════════\n")
+cat("Valeur nominale finale  :", format(round(tail(valeur_nominale,1)), big.mark=" "), "€\n")
+cat("Valeur réelle finale    :", format(round(tail(valeur_reelle,1)),   big.mark=" "), "€\n")
+cat("Perte due à l'inflation :", format(round(tail(perte_inflation,1)), big.mark=" "), "€\n")
+cat("Argent total investi    :", format(round(tail(argent_investi,1)),  big.mark=" "), "€\n")
+cat("Equity nette finale     :", format(round(tail(equity_nette,1)),    big.mark=" "), "€\n")
+cat("Equity réelle finale    :", format(round(tail(equity_reelle,1)),   big.mark=" "), "€\n")
+cat("Plus-value réelle nette :", format(round(tail(equity_reelle,1) - tail(argent_investi,1)), big.mark=" "), "€\n")
+```
+
