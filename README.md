@@ -1,3 +1,4 @@
+yo
 # SavingsSimulationAndPrediction
 
 Simulation of financial asset evolution and investment strategies, combined with a predictive model for monthly S&P 500 trends using Random Forest.
