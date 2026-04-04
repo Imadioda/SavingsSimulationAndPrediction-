@@ -16,32 +16,34 @@ Simulation of financial asset evolution and investment strategies, combined with
 ---
 
 ## Project Structure
+```
 SavingsSimulationAndPrediction/
-├── DataCsv/                        # CSV files for financial assets & S&P 500 descriptive variables
 │
-├── PyData/                         # Python scripts for data acquisition
-│   ├── yfinanceDATA.py             # Fetches monthly OHLCV data for multiple assets (yfinance)
-│   └── RecupDataSNP500.py          # Fetches S&P 500 dataset with macro descriptive variables
+├── DataCsv/                         # CSV files for financial assets & S&P 500 descriptive variables
 │
-├── HtmlWS/                         # Interactive web simulators
-│   ├── SimulationImmob.html        # Real estate investment simulator
-│   └── PortfolioSimulator.html     # Multi-asset portfolio simulator
+├── PyData/                          # Python scripts for data acquisition
+│   ├── yfinanceDATA.py              # Fetches monthly OHLCV data for multiple assets (yfinance)
+│   └── RecupDataSNP500.py           # Fetches S&P 500 dataset with macro descriptive variables
 │
-├── Epargne/                        # Asset evolution & savings simulation
-│   ├── Epargne.Rmd                 # R Markdown — savings visualization
-│   └── Epargne.R                   # R Script — savings simulation
+├── HtmlWS/                          # Interactive web simulators
+│   ├── SimulationImmob.html         # Real estate investment simulator
+│   └── PortfolioSimulator.html      # Multi-asset portfolio simulator
 │
-├── RegressionModels/               # Regression-based predictive models
-│   ├── ModelMultipleReg.Rmd        # R Markdown — multiple & logistic regression
-│   └── RegressionModels.R          # R Script — multiple regression + logistic (simple & optimised)
+├── Epargne/                         # Asset evolution & savings simulation
+│   ├── Epargne.Rmd                  # R Markdown — savings visualization
+│   └── Epargne.R                    # R Script — savings simulation
 │
-├── RFandXGB/                       # Tree-based predictive models
-│   ├── ForXgbModel.Rmd             # R Markdown — Random Forest & XGBoost (R)
-│   ├── RFandXGB.R                  # R Script — Random Forest & XGBoost (R)
+├── RegressionModels/                # Regression-based predictive models
+│   ├── ModelMultipleReg.Rmd         # R Markdown — multiple & logistic regression
+│   └── RegressionModels.R           # R Script — multiple regression + logistic (simple & optimised)
+│
+├── RFandXGB/                        # Tree-based predictive models
+│   ├── ForXgbModel.Rmd              # R Markdown — Random Forest & XGBoost (R)
+│   ├── RFandXGB.R                   # R Script — Random Forest & XGBoost (R)
 │   └── snp500_modeles_predictifs.py # Python — Random Forest & XGBoost (sklearn / xgboost)
 │
 └── README.md
-
+```
 ---
 
 ## Web Applications
