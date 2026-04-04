@@ -1,0 +1,407 @@
+#0. PACKAGES
+packages <- c("tidyverse", "lubridate", "randomForest", "ranger", "xgboost",
+              "caret", "MLmetrics", "pROC", "ggplot2", "scales",
+              "Boruta", "doParallel", "foreach", "gridExtra")
+
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) install.packages(pkg)
+}
+invisible(lapply(packages, install_if_missing))
+invisible(lapply(packages, library, character.only = TRUE))
+
+set.seed(42)
+
+# 1. CHARGEMENT & NETTOYAGE DES DONNÉES
+
+# Lecture du CSV (séparateur ; et décimales françaises)
+raw <- read.csv2("snp500_enrichi.csv",
+                 stringsAsFactors = FALSE,
+                 na.strings = c("", "NA", "N/A", "NaN"))
+
+raw2<-na.omit(raw)
+dim(raw)
+
+cat("Dimensions brutes :", nrow(raw), "x", ncol(raw), "\n")
+
+# Convertir les colonnes numériques (virgule → point)
+to_numeric_fr <- function(x) {
+  as.numeric(gsub(",", ".", x))
+}
+
+# Colonnes à convertir
+num_cols <- setdiff(names(raw), "Date")
+raw[num_cols] <- lapply(raw[num_cols], to_numeric_fr)
+
+# Parsing de la date
+raw$Date <- as.Date(raw$Date)
+
+# Tri chronologique
+df <- raw %>% arrange(Date)
+
+# 2. INGÉNIERIE DE LA VARIABLE CIBLE
+# Cible : est-ce que le mois SUIVANT sera haussier (1) ou baissier (0) ?
+# On prédit le rendement du prochain mois → décalage d'un mois (lag)
+
+df <- df %>%
+  mutate(
+    Target_Rendement  = lead(Rendement_Mensuel_Pct, 1),      # rendement futur
+    Target            = factor(if_else(Target_Rendement > 0, 1L, 0L),
+                               levels = c(0, 1),
+                               labels = c("Baisse", "Hausse"))
+  )
+
+cat("Distribution de la cible :\n")
+print(table(df$Target, useNA = "ifany"))
+
+# 3. SÉLECTION DES FEATURES & TRAITEMENT DES NA
+feature_cols <- c(
+  # Momentum / Prix
+  "Momentum_12_1_Mois", "Momentum_6_Mois", "Momentum_3_Mois", "Momentum_1_Mois",
+  # Taux
+  "Fed_Taux_Directeur", "Fed_Taux_Variation",
+  "Taux_10ans", "Taux_2ans", "Taux_3mois",
+  "Spread_10ans_2ans", "Spread_10ans_3mois", "Spread_Calcule_10_2",
+  "Taux_Hypothecaire_30ans",
+  # Macroéconomie
+  "CPI_Variation_Pct", "Taux_Chomage", "Chomage_Variation",
+  "Production_Indus_Pct", "Ventes_Detail_Pct",
+  # Crédit & Liquidité
+  "Credit_Spread_IG", "Credit_Spread_HY", "TED_Spread",
+  "M2_Variation_Pct",
+  # Risque & Volatilité
+  "VIX_Niveau", "VIX_Variation", "Volatilite_Realisee_Ann",
+  "Variance_Risk_Premium",
+  # Sentiment
+  "Sentiment_Michigan", "Sentiment_Michigan_Var",
+  # Matières premières & FX
+  "Petrole_WTI_Pct", "EURUSD_Pct"
+)
+
+# Filtrer les lignes avec cible disponible
+model_df <- df %>%
+  filter(!is.na(Target)) %>%
+  select(Date, all_of(feature_cols), Target)
+
+# Imputation des NA par la médiane (robuste, évite le look-ahead bias)
+impute_median <- function(x) {
+  x[is.na(x)] <- median(x, na.rm = TRUE)
+  x
+}
+model_df[feature_cols] <- lapply(model_df[feature_cols], impute_median)
+
+cat("\nLignes après nettoyage :", nrow(model_df), "\n")
+cat("NA restants :", sum(is.na(model_df)), "\n")
+
+# 4. SPLIT TRAIN / TEST (validation temporelle — pas de data leakage)
+
+# 80% train (chronologique), 20% test
+
+split_idx  <- floor(0.80 * nrow(model_df))
+train_df   <- model_df[1:split_idx, ]
+test_df    <- model_df[(split_idx + 1):nrow(model_df), ]
+
+X_train    <- train_df[, feature_cols]
+y_train    <- train_df$Target
+X_test     <- test_df[, feature_cols]
+y_test     <- test_df$Target
+
+cat("\nPériode d'entraînement :", as.character(min(train_df$Date)),
+    "→", as.character(max(train_df$Date)), "\n")
+cat("Période de test        :", as.character(min(test_df$Date)),
+    "→", as.character(max(test_df$Date)), "\n")
+cat("Train :", nrow(train_df), "obs | Test :", nrow(test_df), "obs\n")
+
+# 5. VALIDATION CROISÉE TEMPORELLE (TimeSeriesCV)
+
+# caret avec method="timeslice" pour respecter l'ordre chronologique
+
+ts_ctrl <- trainControl(
+  method          = "timeslice",
+  initialWindow  = 120,     # 10 ans de données initiales
+  horizon        = 12,      # prédire 12 mois à l'avance
+  fixedWindow    = FALSE,   # fenêtre expansive (expanding window)
+  summaryFunction = twoClassSummary,
+  classProbs      = TRUE,
+  savePredictions = "final",
+  verboseIter    = FALSE
+)
+
+
+cat("\n========== RANDOM FOREST ==========\n")
+cl <- makeCluster(detectCores() - 1)
+registerDoParallel(cl)
+
+rf_grid <- expand.grid(
+  mtry          = c(3, 7, 13),
+  splitrule     = c("gini", "extratrees"),
+  min.node.size = c(5, 15)
+)
+
+rf_model <- train(
+  x          = X_train,
+  y          = y_train,
+  method     = "ranger",
+  trControl  = ts_ctrl,
+  tuneGrid   = rf_grid,
+  metric     = "ROC",
+  num.trees  = 200,
+  importance = "impurity",
+  seed       = 42
+)
+
+stopCluster(cl)
+
+# Réentraîner le modèle final avec 500 arbres
+best_rf <- rf_model$bestTune
+rf_final <- ranger(
+  x             = X_train,
+  y             = y_train,
+  num.trees     = 500,
+  mtry          = best_rf$mtry,
+  splitrule     = best_rf$splitrule,
+  min.node.size = best_rf$min.node.size,
+  importance    = "impurity",
+  probability   = TRUE,
+  seed          = 42,
+  num.threads   = detectCores() - 1
+)
+
+cat("Meilleurs hyperparamètres RF :\n")
+print(best_rf)
+
+# Prédictions avec le modèle final
+rf_pred_prob  <- predict(rf_final, X_test)$predictions[, "Hausse"]
+rf_pred_class <- factor(
+  ifelse(rf_pred_prob >= 0.65, "Hausse", "Baisse"),
+  levels = c("Baisse", "Hausse")
+)
+
+rf_cm  <- confusionMatrix(rf_pred_class, y_test, positive = "Hausse")
+rf_roc <- roc(y_test, rf_pred_prob, levels = c("Baisse", "Hausse"))
+rf_auc <- auc(rf_roc)
+
+cat("\n--- Matrice de confusion RF ---\n")
+print(rf_cm$table)
+cat("\nAUC :",         round(rf_auc, 4))
+cat("\nAccuracy :",    round(rf_cm$overall["Accuracy"], 4))
+cat("\nSensitivity :", round(rf_cm$byClass["Sensitivity"], 4))
+cat("\nSpecificity :", round(rf_cm$byClass["Specificity"], 4))
+cat("\nF1 Score :",    round(rf_cm$byClass["F1"], 4), "\n")
+
+
+cat("OOB Error Rate :", round(rf_final_oob$prediction.error, 4), "\n")
+cat("OOB Accuracy   :", round(1 - rf_final_oob$prediction.error, 4), "\n")
+
+# Prédictions sur le test set
+rf_pred_prob  <- predict(rf_model, X_test, type = "prob")[, "Hausse"]
+rf_pred_class <- predict(rf_model, X_test)
+
+# Métriques
+rf_cm   <- confusionMatrix(rf_pred_class, y_test, positive = "Hausse")
+rf_roc  <- roc(y_test, rf_pred_prob, levels = c("Baisse", "Hausse"))
+rf_auc  <- auc(rf_roc)
+
+cat("\n--- Matrice de confusion RF ---\n")
+print(rf_cm$table)
+cat("\nAUC :", round(rf_auc, 4))
+cat("\nAccuracy :", round(rf_cm$overall["Accuracy"], 4))
+cat("\nSensitivity (rappel Hausse) :", round(rf_cm$byClass["Sensitivity"], 4))
+cat("\nSpecificity (rappel Baisse) :", round(rf_cm$byClass["Specificity"], 4))
+cat("\nF1 Score :", round(rf_cm$byClass["F1"], 4), "\n")
+
+# 7. GRADIENT BOOSTING OPTIMISÉ (XGBoost)
+cat("\n========== GRADIENT BOOSTING (XGBoost) ==========\n")
+
+# Encodage de la cible pour xgboost via caret
+xgb_grid <- expand.grid(
+  nrounds          = c(100, 200, 300),      # nombre d'arbres
+  max_depth        = c(3, 4, 6),            # profondeur max
+  eta              = c(0.01, 0.05, 0.1),   # learning rate
+  gamma            = c(0, 0.1, 0.5),       # régularisation (pénalité sur split)
+  colsample_bytree = c(0.6, 0.8, 1.0),     # fraction de colonnes par arbre
+  min_child_weight = c(1, 5, 10),          # poids min pour créer un nœud
+  subsample        = c(0.7, 0.85, 1.0)     # fraction de lignes par arbre
+)
+
+# Sous-échantillonnage de la grille (trop grande pour un grid search complet)
+set.seed(42)
+xgb_grid_sample <- xgb_grid[sample(nrow(xgb_grid), 60), ]
+
+xgb_model <- train(
+  x         = X_train,
+  y         = y_train,
+  method    = "xgbTree",
+  trControl = ts_ctrl,
+  tuneGrid  = xgb_grid_sample,
+  metric    = "ROC",
+  verbosity = 0
+)
+
+cat("Meilleurs hyperparamètres XGBoost :\n")
+print(xgb_model$bestTune)
+
+# Prédictions
+xgb_pred_prob  <- predict(xgb_model, X_test, type = "prob")[, "Hausse"]
+xgb_pred_class <- predict(xgb_model, X_test)
+
+# Métriques
+xgb_cm  <- confusionMatrix(xgb_pred_class, y_test, positive = "Hausse")
+xgb_roc <- roc(y_test, xgb_pred_prob, levels = c("Baisse", "Hausse"))
+xgb_auc <- auc(xgb_roc)
+
+cat("\n--- Matrice de confusion XGBoost ---\n")
+print(xgb_cm$table)
+cat("\nAUC :", round(xgb_auc, 4))
+cat("\nAccuracy :", round(xgb_cm$overall["Accuracy"], 4))
+cat("\nSensitivity (rappel Hausse) :", round(xgb_cm$byClass["Sensitivity"], 4))
+cat("\nSpecificity (rappel Baisse) :", round(xgb_cm$byClass["Specificity"], 4))
+cat("\nF1 Score :", round(xgb_cm$byClass["F1"], 4), "\n")
+
+# 8. TABLEAU COMPARATIF DES PERFORMANCES
+
+cat("\n========== COMPARAISON DES MODÈLES ==========\n")
+
+results <- data.frame(
+  Modèle      = c("Random Forest (ranger)", "Gradient Boosting (XGBoost)"),
+  AUC         = round(c(rf_auc, xgb_auc), 4),
+  Accuracy    = round(c(rf_cm$overall["Accuracy"],  xgb_cm$overall["Accuracy"]), 4),
+  Sensitivity = round(c(rf_cm$byClass["Sensitivity"], xgb_cm$byClass["Sensitivity"]), 4),
+  Specificity = round(c(rf_cm$byClass["Specificity"], xgb_cm$byClass["Specificity"]), 4),
+  F1          = round(c(rf_cm$byClass["F1"], xgb_cm$byClass["F1"]), 4)
+)
+print(results)
+
+# 9. IMPORTANCE DES VARIABLES
+
+# RF — importance via ranger
+rf_imp <- varImp(rf_model)$importance %>%
+  rownames_to_column("Feature") %>%
+  arrange(desc(Overall)) %>%
+  head(15)
+
+# XGBoost — importance
+xgb_imp <- varImp(xgb_model)$importance %>%
+  rownames_to_column("Feature") %>%
+  arrange(desc(Overall)) %>%
+  head(15)
+
+p_rf_imp <- ggplot(rf_imp, aes(x = reorder(Feature, Overall), y = Overall)) +
+  geom_col(fill = "#2E86AB", alpha = 0.85) +
+  coord_flip() +
+  labs(title = "Importance des variables — Random Forest",
+       x = NULL, y = "Importance (Gini)") +
+  theme_minimal(base_size = 11)
+
+p_xgb_imp <- ggplot(xgb_imp, aes(x = reorder(Feature, Overall), y = Overall)) +
+  geom_col(fill = "#E84855", alpha = 0.85) +
+  coord_flip() +
+  labs(title = "Importance des variables — XGBoost",
+       x = NULL, y = "Importance (Gain)") +
+  theme_minimal(base_size = 11)
+
+# Courbes ROC comparées
+p_roc <- ggplot() +
+  geom_line(data = data.frame(fpr = 1 - rf_roc$specificities,
+                              tpr = rf_roc$sensitivities),
+            aes(x = fpr, y = tpr, color = paste0("RF (AUC=", round(rf_auc,3), ")")),
+            linewidth = 1.2) +
+  geom_line(data = data.frame(fpr = 1 - xgb_roc$specificities,
+                              tpr = xgb_roc$sensitivities),
+            aes(x = fpr, y = tpr, color = paste0("XGBoost (AUC=", round(xgb_auc,3), ")")),
+            linewidth = 1.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+  scale_color_manual(values = c("#2E86AB", "#E84855")) +
+  labs(title = "Courbes ROC — Comparaison des modèles",
+       x = "Taux de Faux Positifs (1 - Spécificité)",
+       y = "Taux de Vrais Positifs (Sensibilité)",
+       color = "Modèle") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
+
+# Sauvegarde des graphiques
+pdf("snp500_resultats.pdf", width = 14, height = 10)
+grid.arrange(p_rf_imp, p_xgb_imp, nrow = 1)
+print(p_roc)
+dev.off()
+
+cat("\nGraphiques sauvegardés dans 'snp500_resultats.pdf'\n")
+
+# 10. BACKTESTING : SIMULATION D'UNE STRATÉGIE LONG/CASH
+# Si le modèle prédit "Hausse" → on est investi (rendement réel du mois)
+# Si le modèle prédit "Baisse" → on reste en cash (rendement = 0)
+
+backtest <- test_df %>%
+  mutate(
+    Rendement_Reel  = Target_Rendement / 100,
+    Signal_RF       = as.integer(rf_pred_class == "Hausse"),
+    Signal_XGB      = as.integer(xgb_pred_class == "Hausse"),
+    Strat_RF        = Signal_RF  * Rendement_Reel,
+    Strat_XGB       = Signal_XGB * Rendement_Reel,
+    BuyHold         = Rendement_Reel
+  ) %>%
+  mutate(
+    CumBuyHold = cumprod(1 + BuyHold),
+    CumRF      = cumprod(1 + Strat_RF),
+    CumXGB     = cumprod(1 + Strat_XGB)
+  )
+
+# Rendement total et Sharpe (mensuel → annualisé)
+sharpe <- function(r) {
+  mean(r, na.rm = TRUE) / sd(r, na.rm = TRUE) * sqrt(12)
+}
+
+cat("\n========== BACKTEST SUR LA PÉRIODE DE TEST ==========\n")
+bt_results <- data.frame(
+  Stratégie        = c("Buy & Hold", "RF Long/Cash", "XGBoost Long/Cash"),
+  Rendement_Total  = round(c(last(backtest$CumBuyHold) - 1,
+                             last(backtest$CumRF) - 1,
+                             last(backtest$CumXGB) - 1) * 100, 2),
+  Sharpe_Annualisé = round(c(sharpe(backtest$BuyHold),
+                             sharpe(backtest$Strat_RF),
+                             sharpe(backtest$Strat_XGB)), 3),
+  Mois_Investis    = c(nrow(backtest),
+                       sum(backtest$Signal_RF),
+                       sum(backtest$Signal_XGB))
+)
+print(bt_results)
+
+# Graphique de performance cumulée
+p_backtest <- backtest %>%
+  select(Date, BuyHold = CumBuyHold, RF = CumRF, XGBoost = CumXGB) %>%
+  pivot_longer(-Date, names_to = "Stratégie", values_to = "Valeur") %>%
+  ggplot(aes(x = Date, y = Valeur, color = Stratégie)) +
+  geom_line(linewidth = 1.1) +
+  scale_y_continuous(labels = scales::percent_format(scale = 100)) +
+  scale_color_manual(values = c("BuyHold" = "grey50",
+                                "RF"      = "#2E86AB",
+                                "XGBoost" = "#E84855")) +
+  labs(title = "Performance cumulée — Backtest (période de test)",
+       subtitle = "Stratégie Long/Cash basée sur la prédiction du modèle",
+       x = NULL, y = "Valeur du portefeuille (base 1)",
+       color = "Stratégie") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
+
+pdf("snp500_backtest.pdf", width = 10, height = 6)
+print(p_backtest)
+dev.off()
+cat("Backtest sauvegardé dans 'snp500_backtest.pdf'\n")
+
+# 11. PRÉDICTION DU MOIS SUIVANT (dernier signal)
+cat("\n========== SIGNAL POUR LE MOIS SUIVANT ==========\n")
+
+last_row  <- model_df %>% tail(1)
+last_X    <- last_row[, feature_cols]
+last_date <- last_row$Date
+
+rf_signal  <- predict(rf_model,  last_X, type = "prob")
+xgb_signal <- predict(xgb_model, last_X, type = "prob")
+
+cat("Données au :", format(last_date, "%B %Y"), "\n\n")
+cat("Random Forest  → P(Hausse) =", round(rf_signal[, "Hausse"]  * 100, 1), "%",
+    "→ Signal :", ifelse(rf_signal[, "Hausse"]  > 0.5, "LONG ↑", "CASH ↓"), "\n")
+cat("XGBoost        → P(Hausse) =", round(xgb_signal[, "Hausse"] * 100, 1), "%",
+    "→ Signal :", ifelse(xgb_signal[, "Hausse"] > 0.5, "LONG ↑", "CASH ↓"), "\n")
+
+
+
